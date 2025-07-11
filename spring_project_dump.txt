@@ -1,0 +1,793 @@
+
+
+--- File: .mvn\wrapper\maven-wrapper.properties ---
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+wrapperVersion=3.3.2
+distributionType=only-script
+distributionUrl=https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.9.10/apache-maven-3.9.10-bin.zip
+
+
+--- File: src\main\java\basicticketmanagement\BasicTicketManagementApplication.java ---
+package basicticketmanagement;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class BasicTicketManagementApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(BasicTicketManagementApplication.class, args);
+    }
+
+}
+
+
+--- File: src\main\java\basicticketmanagement\configure\CorsConfigure.java ---
+package basicticketmanagement.configure;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+@Configuration
+public class CorsConfigure {
+
+    @Bean
+    public WebMvcConfigurer corsConfigurer() {
+        return new WebMvcConfigurer() {
+            @Override
+            public void addCorsMappings(org.springframework.web.servlet.config.annotation.CorsRegistry registry) {
+                registry.addMapping("/**")
+                        .allowedOrigins("http://localhost:3000") // Use exact origin(s)
+                        .allowCredentials(true)
+                        .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                        .allowedHeaders("*");
+            }
+        };
+    }
+}
+
+
+--- File: src\main\java\basicticketmanagement\controller\CustomerController.java ---
+package basicticketmanagement.controller;
+
+import basicticketmanagement.model.Customer;
+import basicticketmanagement.service.CustomerService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/customers")
+@RequiredArgsConstructor
+public class CustomerController {
+
+
+    private final CustomerService customerService;
+
+    @PostMapping
+    public ResponseEntity<Customer> createCustomer(@RequestBody Customer customer) {
+        if (customer.getId() != null) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok(customerService.createCustomer(customer));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Customer> updateCustomer(@PathVariable Long id, @RequestBody Customer customer) {
+        try {
+            Customer updatedCustomer = customerService.updateCustomer(id, customer);
+            return ResponseEntity.ok(updatedCustomer);
+        } catch (jakarta.persistence.EntityNotFoundException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @GetMapping
+    public ResponseEntity<List<Customer>> getAllCustomers() {
+        return ResponseEntity.ok(customerService.getAllCustomers());
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<Customer> getCustomer(@PathVariable Long id) {
+        return customerService.getCustomerById((id))
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+}
+
+
+--- File: src\main\java\basicticketmanagement\controller\EngineerController.java ---
+package basicticketmanagement.controller;
+
+import basicticketmanagement.model.Engineer;
+import basicticketmanagement.service.EngineerService;
+import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/engineers")
+@RequiredArgsConstructor
+public class EngineerController {
+
+    private final EngineerService engineerService;
+
+    @PostMapping
+    public ResponseEntity<Engineer> createEngineer(@RequestBody Engineer engineer) {
+        Engineer saved = engineerService.createEngineer(engineer);
+        return ResponseEntity.ok(saved);
+    }
+
+    @GetMapping
+    public ResponseEntity<List<Engineer>> getAllEngineers() {
+        return ResponseEntity.ok(engineerService.getAllEngineers());
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<Engineer> getEngineerById(@PathVariable Long id) {
+        return engineerService.getEngineerById(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Engineer> updateEngineer(@PathVariable Long id, @RequestBody Engineer input) {
+        try {
+            Engineer updatedEngineer = engineerService.updateEngineer(id, input);
+            return ResponseEntity.ok(updatedEngineer);
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteEngineer(@PathVariable Long id) {
+        try {
+            engineerService.deleteEngineer(id);
+            return ResponseEntity.ok().build();
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+}
+
+
+--- File: src\main\java\basicticketmanagement\controller\HomeController.java ---
+package basicticketmanagement.controller;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class HomeController {
+
+    @GetMapping("/")
+    public String home() {
+        return "Welcome to the Home Page!";
+    }
+}
+
+--- File: src\main\java\basicticketmanagement\controller\TicketController.java ---
+package basicticketmanagement.controller;
+
+import basicticketmanagement.model.Ticket;
+import basicticketmanagement.service.TicketService; // Import the updated service
+import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+/**
+ * REST Controller for managing Ticket resources.
+ * This controller handles HTTP requests related to tickets,
+ * delegating business logic to the TicketService.
+ */
+@RestController
+@RequestMapping("/tickets")
+@RequiredArgsConstructor
+public class TicketController {
+
+    private final TicketService ticketService; // Inject the service
+
+    /**
+     * Creates a new Ticket.
+     * Note: This endpoint expects a Ticket object, but for creating,
+     * it might be better to have a DTO that only includes description
+     * and customerId, then call ticketService.createTicket(customerId, description).
+     * For simplicity, this example assumes the client sends a Ticket object
+     * where only description and potentially createdBy.id are relevant for creation.
+     *
+     * @param ticket The Ticket object to be created.
+     * @return ResponseEntity containing the created Ticket and HTTP status 201 (Created).
+     */
+    @PostMapping
+    public ResponseEntity<Ticket> createTicket(@RequestBody Ticket ticket) {
+        // Assuming the client sends a ticket object with at least description and createdBy.id
+        // If createdBy.id is not directly available in the request body,
+        // you might need a DTO or a separate endpoint for creating tickets.
+        // For now, let's assume `ticket.getCreatedBy().getId()` is available from the request.
+        // If not, you'd need to adjust the client request or this method signature.
+        try {
+            // This call needs adjustment if the client doesn't send customerId directly.
+            // For now, using a placeholder for customerId extraction.
+            // A more robust solution would involve a DTO for ticket creation.
+            Long customerId = ticket.getCreatedBy() != null ? ticket.getCreatedBy().getId() : null;
+            if (customerId == null) {
+                return ResponseEntity.badRequest().body(null); // Or throw specific exception
+            }
+            Ticket savedTicket = ticketService.createTicket(customerId, ticket.getDescription());
+            return new ResponseEntity<>(savedTicket, HttpStatus.CREATED);
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.badRequest().body(null); // Customer not found
+        }
+    }
+
+    /**
+     * Retrieves all Tickets.
+     *
+     * @return ResponseEntity containing a list of all Tickets and HTTP status 200 (OK).
+     */
+    @GetMapping
+    public ResponseEntity<List<Ticket>> getAllTickets() {
+        List<Ticket> tickets = ticketService.getAllTickets();
+        return ResponseEntity.ok(tickets);
+    }
+
+    /**
+     * Retrieves a Ticket by its ID.
+     *
+     * @param id The ID of the ticket to retrieve.
+     * @return ResponseEntity containing the Ticket if found (HTTP 200 OK),
+     * or HTTP status 404 (Not Found) if not found.
+     */
+    @GetMapping("/{id}")
+    public ResponseEntity<Ticket> getTicketById(@PathVariable Long id) {
+        return ticketService.getTicketById(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Updates an existing Ticket.
+     *
+     * @param id The ID of the ticket to update.
+     * @param input The Ticket object with updated details.
+     * @return ResponseEntity containing the updated Ticket (HTTP 200 OK),
+     * or HTTP status 404 (Not Found) if the ticket does not exist.
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<Ticket> updateTicket(@PathVariable Long id, @RequestBody Ticket input) {
+        try {
+            Ticket updatedTicket = ticketService.updateTicket(id, input);
+            return ResponseEntity.ok(updatedTicket);
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    /**
+     * Deletes a Ticket by its ID.
+     *
+     * @param id The ID of the ticket to delete.
+     * @return ResponseEntity with HTTP status 200 (OK) if deleted successfully,
+     * or HTTP status 404 (Not Found) if the ticket does not exist.
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteTicket(@PathVariable Long id) {
+        try {
+            ticketService.deleteTicket(id);
+            return ResponseEntity.ok().build();
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    /**
+     * Acknowledges a ticket by assigning an engineer.
+     *
+     * @param ticketId The ID of the ticket to acknowledge.
+     * @param engineerId The ID of the engineer acknowledging the ticket.
+     * @return ResponseEntity containing the acknowledged Ticket (HTTP 200 OK),
+     * or HTTP status 404 (Not Found) if ticket or engineer does not exist.
+     */
+    @PutMapping("/{ticketId}/acknowledge/{engineerId}")
+    public ResponseEntity<Ticket> acknowledgeTicket(
+            @PathVariable Long ticketId,
+            @PathVariable Long engineerId) {
+        try {
+            Ticket acknowledgedTicket = ticketService.acknowledgeTicket(ticketId, engineerId);
+            return ResponseEntity.ok(acknowledgedTicket);
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+}
+
+
+--- File: src\main\java\basicticketmanagement\model\Customer.java ---
+package basicticketmanagement.model;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Entity
+@Getter
+@Setter
+@Table(name = "customers")
+@NoArgsConstructor
+public class Customer extends User{
+}
+
+
+--- File: src\main\java\basicticketmanagement\model\Engineer.java ---
+package basicticketmanagement.model;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+
+@NoArgsConstructor
+@Entity
+@Table(name = "engineers")
+public class Engineer extends User{
+    public Engineer(Long id, String username, String password) {
+        super(id, username, password);
+    }
+
+}
+
+
+--- File: src\main\java\basicticketmanagement\model\Ticket.java ---
+package basicticketmanagement.model;
+
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+import java.time.LocalDateTime;
+
+
+
+@Entity
+@Table(name = "tickets")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class Ticket {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String description;
+
+    @Enumerated(EnumType.STRING)
+    private TicketStatus status = TicketStatus.CREATED;
+    @ManyToOne
+    private Customer createdBy;
+    @ManyToOne
+    private Engineer acknowledgedBy;
+
+}
+
+--- File: src\main\java\basicticketmanagement\model\TicketStatus.java ---
+package basicticketmanagement.model;
+
+public enum TicketStatus {
+    CREATED,
+    ACKNOWLEDGED,
+    IN_PROGRESS,
+    CLOSED
+}
+
+
+--- File: src\main\java\basicticketmanagement\model\User.java ---
+
+package basicticketmanagement.model;
+
+import jakarta.persistence.*;
+import lombok.*;
+
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
+@MappedSuperclass
+public abstract class User {
+    @Id
+    @GeneratedValue
+    private Long id;
+
+    @Column(unique = true)
+    private String username;
+    private String password;
+}
+
+--- File: src\main\java\basicticketmanagement\repository\CustomerRepository.java ---
+package basicticketmanagement.repository;
+
+import basicticketmanagement.model.Customer;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface CustomerRepository extends JpaRepository<Customer, Long> {
+}
+
+
+--- File: src\main\java\basicticketmanagement\repository\EngineerRepository.java ---
+package basicticketmanagement.repository;
+
+import basicticketmanagement.model.Engineer;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface EngineerRepository extends JpaRepository<Engineer, Long> {
+}
+
+
+--- File: src\main\java\basicticketmanagement\repository\TicketRepository.java ---
+package basicticketmanagement.repository;
+
+import basicticketmanagement.model.Ticket;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface TicketRepository extends JpaRepository <Ticket, Long> {
+}
+
+
+--- File: src\main\java\basicticketmanagement\service\CustomerService.java ---
+package basicticketmanagement.service;
+
+// src\main\java\basicticketmanagement\service\CustomerService.java (New File)
+
+import basicticketmanagement.model.Customer;
+import basicticketmanagement.repository.CustomerRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.Optional;
+
+@Service
+@RequiredArgsConstructor
+public class CustomerService {
+
+    private final CustomerRepository customerRepository;
+
+    public Customer createCustomer(Customer customer) {
+        return customerRepository.save(customer);
+    }
+
+    public List<Customer> getAllCustomers() {
+        return customerRepository.findAll();
+    }
+
+    public Optional<Customer> getCustomerById(Long id) {
+        return customerRepository.findById(id);
+    }
+
+    public Customer updateCustomer(Long id, Customer customerDetails) {
+        return customerRepository.findById(id)
+                .map(customer -> {
+                    customer.setUsername(customerDetails.getUsername());
+                    customer.setPassword(customerDetails.getPassword());
+                    return customerRepository.save(customer);
+                })
+                .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("Customer not found with id " + id));
+    }
+}
+
+
+--- File: src\main\java\basicticketmanagement\service\EngineerService.java ---
+package basicticketmanagement.service;
+
+import basicticketmanagement.model.Engineer;
+import basicticketmanagement.repository.EngineerRepository;
+import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * Service class for managing Engineer entities.
+ * This class handles the business logic related to engineers,
+ * abstracting direct repository access from the controllers.
+ */
+@Service
+@RequiredArgsConstructor
+public class EngineerService {
+
+    private final EngineerRepository engineerRepository;
+
+    /**
+     * Creates a new Engineer.
+     *
+     * @param engineer The Engineer object to be saved.
+     * @return The saved Engineer object.
+     */
+    public Engineer createEngineer(Engineer engineer) {
+        // In a real application, you might add validation here
+        // For instance, checking for duplicate usernames before saving.
+        return engineerRepository.save(engineer);
+    }
+
+    /**
+     * Retrieves all Engineers.
+     *
+     * @return A list of all Engineer objects.
+     */
+    public List<Engineer> getAllEngineers() {
+        return engineerRepository.findAll();
+    }
+
+    /**
+     * Retrieves an Engineer by their ID.
+     *
+     * @param id The ID of the engineer to retrieve.
+     * @return An Optional containing the Engineer if found, or empty if not.
+     */
+    public Optional<Engineer> getEngineerById(Long id) {
+        return engineerRepository.findById(id);
+    }
+
+    /**
+     * Updates an existing Engineer.
+     *
+     * @param id              The ID of the engineer to update.
+     * @param engineerDetails The Engineer object containing updated details.
+     * @return The updated Engineer object.
+     * @throws EntityNotFoundException if no engineer with the given ID is found.
+     */
+    public Engineer updateEngineer(Long id, Engineer engineerDetails) {
+        return engineerRepository.findById(id)
+                .map(engineer -> {
+                    // Update only the fields that are meant to be updated
+                    engineer.setUsername(engineerDetails.getUsername());
+                    engineer.setPassword(engineerDetails.getPassword());
+                    // Add any other fields that can be updated
+                    return engineerRepository.save(engineer);
+                })
+                .orElseThrow(() -> new EntityNotFoundException("Engineer not found with id " + id));
+    }
+
+    /**
+     * Deletes an Engineer by their ID.
+     *
+     * @param id The ID of the engineer to delete.
+     * @throws EntityNotFoundException if no engineer with the given ID is found.
+     */
+    public void deleteEngineer(Long id) {
+        if (!engineerRepository.existsById(id)) {
+            throw new EntityNotFoundException("Engineer not found with id " + id);
+        }
+        engineerRepository.deleteById(id);
+    }
+}
+
+
+--- File: src\main\java\basicticketmanagement\service\TicketService.java ---
+package basicticketmanagement.service;
+
+import basicticketmanagement.model.Customer;
+import basicticketmanagement.model.Engineer;
+import basicticketmanagement.model.Ticket;
+import basicticketmanagement.model.TicketStatus;
+import basicticketmanagement.repository.CustomerRepository;
+import basicticketmanagement.repository.EngineerRepository;
+import basicticketmanagement.repository.TicketRepository;
+import jakarta.persistence.EntityNotFoundException;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * Service class for managing Ticket entities.
+ * This class encapsulates the business logic for creating, acknowledging,
+ * updating, retrieving, and deleting tickets.
+ */
+@Service
+@RequiredArgsConstructor // Using Lombok's RequiredArgsConstructor for constructor injection
+public class TicketService {
+
+    private final TicketRepository ticketRepo;
+    private final CustomerRepository customerRepo;
+    private final EngineerRepository engineerRepo;
+
+    /**
+     * Creates a new ticket.
+     *
+     * @param customerId The ID of the customer creating the ticket.
+     * @param description The description of the ticket.
+     * @return The newly created Ticket object.
+     * @throws EntityNotFoundException if the customer is not found.
+     */
+    public Ticket createTicket(Long customerId, String description) {
+        Customer customer = customerRepo.findById(customerId)
+                .orElseThrow(() -> new EntityNotFoundException("Customer not found with id " + customerId));
+
+        Ticket ticket = new Ticket();
+        ticket.setCreatedBy(customer);
+        ticket.setDescription(description);
+        ticket.setStatus(TicketStatus.CREATED); // Ensure status is set to CREATED
+        return ticketRepo.save(ticket);
+    }
+
+    /**
+     * Acknowledges a ticket by assigning an engineer and updating its status.
+     *
+     * @param ticketId The ID of the ticket to acknowledge.
+     * @param engineerId The ID of the engineer acknowledging the ticket.
+     * @return The updated Ticket object.
+     * @throws EntityNotFoundException if the ticket or engineer is not found.
+     */
+    public Ticket acknowledgeTicket(Long ticketId, Long engineerId) {
+        Ticket ticket = ticketRepo.findById(ticketId)
+                .orElseThrow(() -> new EntityNotFoundException("Ticket not found with id " + ticketId));
+
+        Engineer engineer = engineerRepo.findById(engineerId)
+                .orElseThrow(() -> new EntityNotFoundException("Engineer not found with id " + engineerId));
+
+        ticket.setStatus(TicketStatus.ACKNOWLEDGED);
+        ticket.setAcknowledgedBy(engineer);
+        return ticketRepo.save(ticket);
+    }
+
+    /**
+     * Retrieves all tickets.
+     *
+     * @return A list of all Ticket objects.
+     */
+    public List<Ticket> getAllTickets() {
+        return ticketRepo.findAll();
+    }
+
+    /**
+     * Retrieves a ticket by its ID.
+     *
+     * @param id The ID of the ticket to retrieve.
+     * @return An Optional containing the Ticket if found, or empty if not.
+     */
+    public Optional<Ticket> getTicketById(Long id) {
+        return ticketRepo.findById(id);
+    }
+
+    /**
+     * Updates an existing ticket.
+     *
+     * @param id The ID of the ticket to update.
+     * @param ticketDetails The Ticket object containing updated details.
+     * @return The updated Ticket object.
+     * @throws EntityNotFoundException if no ticket with the given ID is found.
+     */
+    public Ticket updateTicket(Long id, Ticket ticketDetails) {
+        return ticketRepo.findById(id)
+                .map(ticket -> {
+                    ticket.setDescription(ticketDetails.getDescription());
+                    ticket.setStatus(ticketDetails.getStatus());
+                    // You might want to allow updating acknowledgedBy as well,
+                    // depending on your business rules.
+                    // ticket.setAcknowledgedBy(ticketDetails.getAcknowledgedBy());
+                    return ticketRepo.save(ticket);
+                })
+                .orElseThrow(() -> new EntityNotFoundException("Ticket not found with id " + id));
+    }
+
+    /**
+     * Deletes a ticket by its ID.
+     *
+     * @param id The ID of the ticket to delete.
+     * @throws EntityNotFoundException if no ticket with the given ID is found.
+     */
+    public void deleteTicket(Long id) {
+        if (!ticketRepo.existsById(id)) {
+            throw new EntityNotFoundException("Ticket not found with id " + id);
+        }
+        ticketRepo.deleteById(id);
+    }
+}
+
+
+--- File: src\main\resources\application.properties ---
+# DataSource Configuration
+spring.datasource.url=jdbc:mysql://localhost:3306/ticketdb
+spring.datasource.username=root
+spring.datasource.password=root@1234
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+
+# JPA/Hibernate Configuration
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.format_sql=true
+
+# Server Port
+server.port=8080
+
+# Optional: Logging
+
+#debug=
+
+# src\main\resources\application.properties
+# For production, change DEBUG to INFO or WARN for less verbose logging
+logging.level.org.hibernate.SQL=INFO
+
+--- File: src\test\java\basicticketmanagement\BasicTicketManagementApplicationTests.java ---
+package basicticketmanagement;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+
+@SpringBootTest
+class BasicTicketManagementApplicationTests {
+
+    @Test
+    void contextLoads() {
+    }
+
+}
+
+
+--- File: target\classes\application.properties ---
+# DataSource Configuration
+spring.datasource.url=jdbc:mysql://localhost:3306/ticketdb
+spring.datasource.username=root
+spring.datasource.password=root@1234
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+
+# JPA/Hibernate Configuration
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.format_sql=true
+
+# Server Port
+server.port=8080
+
+# Optional: Logging
+
+#debug=
+
+# src\main\resources\application.properties
+# For production, change DEBUG to INFO or WARN for less verbose logging
+logging.level.org.hibernate.SQL=INFO

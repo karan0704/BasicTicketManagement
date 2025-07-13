@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ticket Management System</title>
+</head>
+<body>
+    <h1>Ticket Management System</h1>
+
+    <div id="message-area" style="color: red; margin-bottom: 10px;"></div>
+
+    <!-- Login Section -->
+    <section id="login-section">
+        <h2>Login</h2>
+        <form id="login-form">
+            <label for="login-username">Username:</label><br>
+            <input type="text" id="login-username" name="username" required><br><br>
+            <label for="login-password">Password:</label><br>
+            <input type="password" id="login-password" name="password" required><br><br>
+            <button type="submit">Login</button>
+        </form>
+    </section>
+
+    <!-- Authenticated User Section -->
+    <section id="authenticated-section" style="display: none;">
+        <h2 id="welcome-message"></h2>
+        <button id="logout-button">Logout</button>
+
+        <!-- Engineer-specific actions -->
+        <div id="engineer-actions" style="display: none;">
+            <h3>Register New Customer (Engineer Only)</h3>
+            <form id="register-customer-form">
+                <label for="reg-username">Customer Username:</label><br>
+                <input type="text" id="reg-username" name="username" required><br><br>
+                <label for="reg-password">Customer Password:</label><br>
+                <input type="password" id="reg-password" name="password" required><br><br>
+                <button type="submit">Register Customer</button>
+            </form>
+        </div>
+
+        <!-- Customer-specific actions -->
+        <div id="customer-actions" style="display: none;">
+            <h3>Create New Ticket (Customer Only)</h3>
+            <form id="create-ticket-form">
+                <label for="ticket-description">Ticket Description:</label><br>
+                <textarea id="ticket-description" name="description" rows="4" cols="50" required></textarea><br><br>
+                <label for="ticket-engineer-id">Assign Engineer ID (Optional):</label><br>
+                <input type="number" id="ticket-engineer-id" name="engineerId"><br><br>
+                <button type="submit">Create Ticket</button>
+            </form>
+        </div>
+    </section>
+
+    <script>d
+        const API_BASE_URL = 'http://localhost:8080';
+        const messageArea = document.getElementById('message-area');
+        const loginSection = document.getElementById('login-section');
+        const authenticatedSection = document.getElementById('authenticated-section');
+        const welcomeMessage = document.getElementById('welcome-message');
+        const engineerActions = document.getElementById('engineer-actions');
+        const customerActions = document.getElementById('customer-actions');
+        const loginForm = document.getElementById('login-form');
+        const logoutButton = document.getElementById('logout-button');
+        const registerCustomerForm = document.getElementById('register-customer-form');
+        const createTicketForm = document.getElementById('create-ticket-form');
+
+        let currentUserRole = null;
+        let currentUsername = null;
+
+        // Function to display messages
+        function displayMessage(message, isError = false) {
+            messageArea.textContent = message;
+            messageArea.style.color = isError ? 'red' : 'green';
+        }
+
+        // Function to clear messages
+        function clearMessage() {
+            messageArea.textContent = '';
+        }
+
+        // Function to update UI based on authentication status and role
+        function updateUI() {
+            clearMessage();
+            if (currentUserRole) {
+                loginSection.style.display = 'none';
+                authenticatedSection.style.display = 'block';
+                welcomeMessage.textContent = `Welcome, ${currentUsername} (${currentUserRole})!`;
+
+                if (currentUserRole === 'ENGINEER') {
+                    engineerActions.style.display = 'block';
+                    customerActions.style.display = 'none';
+                } else if (currentUserRole === 'CUSTOMER') {
+                    engineerActions.style.display = 'none';
+                    customerActions.style.display = 'block';
+                }
+            } else {
+                loginSection.style.display = 'block';
+                authenticatedSection.style.display = 'none';
+                engineerActions.style.display = 'none';
+                customerActions.style.display = 'none';
+                welcomeMessage.textContent = '';
+            }
+        }
+
+        // Handle Login Form Submission
+        loginForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            clearMessage();
+
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    displayMessage(data.message);
+                    currentUsername = data.username;
+                    // For simplicity, we'll try to determine the role by attempting to access a role-specific endpoint.
+                    // A more robust solution would involve the backend returning the role upon login.
+                    // For now, we'll assume the role based on which action they can perform.
+                    // Let's try to fetch customers (engineer-only endpoint) to determine if it's an engineer.
+                    try {
+                        const engineerCheckResponse = await fetch(`${API_BASE_URL}/customers`, {credentials: 'include'});
+                        if (engineerCheckResponse.ok) {
+                            currentUserRole = 'ENGINEER';
+                        } else {
+                            currentUserRole = 'CUSTOMER'; // If not engineer, assume customer
+                        }
+                    } catch (roleError) {
+                        // If there's an error checking engineer role, assume customer or handle appropriately
+                        currentUserRole = 'CUSTOMER';
+                    }
+                    updateUI();
+                } else {
+                    displayMessage(data.message || 'Login failed!', true);
+                    currentUserRole = null;
+                    currentUsername = null;
+                    updateUI();
+                }
+            } catch (error) {
+                displayMessage(`Error during login: ${error.message}`, true);
+                currentUserRole = null;
+                currentUsername = null;
+                updateUI();
+            }
+        });
+
+        // Handle Logout Button
+        logoutButton.addEventListener('click', async () => {
+            // For session-based authentication, logging out typically involves
+            // invalidating the session on the server. Since we don't have
+            // a dedicated logout endpoint provided in the Spring Boot code,
+            // we'll simulate a client-side logout by clearing local state.
+            // In a real application, you'd call a /logout endpoint on the backend.
+            displayMessage('Logged out successfully.');
+            currentUserRole = null;
+            currentUsername = null;
+            updateUI();
+            // Clear form fields
+            loginForm.reset();
+            registerCustomerForm.reset();
+            createTicketForm.reset();
+        });
+
+        // Handle Register Customer Form Submission (Engineer Only)
+        registerCustomerForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            clearMessage();
+
+            const username = document.getElementById('reg-username').value;
+            const password = document.getElementById('reg-password').value;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/customers`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password }),
+                    credentials: 'include' // Important for sending session cookies
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    displayMessage(`Customer '${data.username}' registered successfully!`);
+                    registerCustomerForm.reset();
+                } else {
+                    displayMessage(data.message || 'Customer registration failed!', true);
+                }
+            } catch (error) {
+                displayMessage(`Error registering customer: ${error.message}`, true);
+            }
+        });
+
+        // Handle Create Ticket Form Submission (Customer Only)
+        createTicketForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            clearMessage();
+
+            const description = document.getElementById('ticket-description').value;
+            const engineerId = document.getElementById('ticket-engineer-id').value;
+
+            const ticketData = {
+                description: description
+            };
+
+            if (engineerId) {
+                ticketData.engineerId = parseInt(engineerId);
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/tickets`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(ticketData),
+                    credentials: 'include' // Important for sending session cookies
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    displayMessage(`Ticket #${data.id} created successfully! Status: ${data.status}`);
+                    createTicketForm.reset();
+                } else {
+                    displayMessage(data.message || 'Ticket creation failed!', true);
+                }
+            } catch (error) {
+                displayMessage(`Error creating ticket: ${error.message}`, true);
+            }
+        });
+
+        // Initial UI update on page load
+        updateUI();
+    </script>
+</body>
+</html>

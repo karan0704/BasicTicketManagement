@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Basic Ticket Management Frontend</title>
+</head>
+<body>
+    <h1>Welcome to Basic Ticket Management</h1>
+
+    <div id="login-section">
+        <h2>Login</h2>
+        <input type="text" id="login-username" placeholder="Username">
+        <input type="password" id="login-password" placeholder="Password">
+        <button id="login-button">Login</button>
+        <p id="login-message" style="color: red;"></p>
+    </div>
+
+    <div id="customer-registration-section" style="display: none;">
+        <h2>Register New Customer (Engineer Only)</h2>
+        <input type="text" id="register-customer-username" placeholder="Customer Username">
+        <input type="password" id="register-customer-password" placeholder="Customer Password">
+        <button id="register-customer-button">Register Customer</button>
+        <p id="register-customer-message" style="color: green;"></p>
+    </div>
+
+    <div id="ticket-creation-section" style="display: none;">
+        <h2>Create New Ticket (Customer Only)</h2>
+        <input type="text" id="ticket-description" placeholder="Ticket Description">
+        <input type="number" id="ticket-customer-id" placeholder="Your Customer ID (e.g., 1)">
+        <input type="number" id="ticket-engineer-id" placeholder="Optional: Engineer ID to assign">
+        <button id="create-ticket-button">Create Ticket</button>
+        <p id="create-ticket-message" style="color: green;"></p>
+    </div>
+
+    <div id="data-display-section" style="display: none;">
+        <h2>API Data</h2>
+        <button id="get-all-customers-button">Get All Customers (Engineer)</button>
+        <button id="get-all-engineers-button">Get All Engineers</button>
+        <button id="get-all-tickets-button">Get All Tickets</button>
+        <button id="logout-button">Logout</button>
+
+        <h3>Customers</h3>
+        <pre id="customers-output"></pre>
+
+        <h3>Engineers</h3>
+        <pre id="engineers-output"></pre>
+
+        <h3>Tickets</h3>
+        <pre id="tickets-output"></pre>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8080';
+
+        // Get elements
+        const loginUsernameInput = document.getElementById('login-username');
+        const loginPasswordInput = document.getElementById('login-password');
+        const loginButton = document.getElementById('login-button');
+        const loginMessage = document.getElementById('login-message');
+
+        const registerCustomerUsernameInput = document.getElementById('register-customer-username');
+        const registerCustomerPasswordInput = document.getElementById('register-customer-password');
+        const registerCustomerButton = document.getElementById('register-customer-button');
+        const registerCustomerMessage = document.getElementById('register-customer-message');
+
+        const ticketDescriptionInput = document.getElementById('ticket-description');
+        const ticketCustomerIdInput = document.getElementById('ticket-customer-id');
+        const ticketEngineerIdInput = document.getElementById('ticket-engineer-id');
+        const createTicketButton = document.getElementById('create-ticket-button');
+        const createTicketMessage = document.getElementById('create-ticket-message');
+
+        const getAllCustomersButton = document.getElementById('get-all-customers-button');
+        const getAllEngineersButton = document.getElementById('get-all-engineers-button');
+        const getAllTicketsButton = document.getElementById('get-all-tickets-button');
+        const logoutButton = document.getElementById('logout-button');
+
+        const customersOutput = document.getElementById('customers-output');
+        const engineersOutput = document.getElementById('engineers-output');
+        const ticketsOutput = document.getElementById('tickets-output');
+
+        const loginSection = document.getElementById('login-section');
+        const customerRegistrationSection = document.getElementById('customer-registration-section');
+        const ticketCreationSection = document.getElementById('ticket-creation-section');
+        const dataDisplaySection = document.getElementById('data-display-section');
+
+        // Helper to update UI visibility
+        function updateUIVisibility(isLoggedIn = false, userRole = null) {
+            if (isLoggedIn) {
+                loginSection.style.display = 'none';
+                dataDisplaySection.style.display = 'block';
+
+                if (userRole === 'ENGINEER') {
+                    customerRegistrationSection.style.display = 'block';
+                    ticketCreationSection.style.display = 'none'; // Engineers don't create tickets
+                } else if (userRole === 'CUSTOMER') {
+                    customerRegistrationSection.style.display = 'none';
+                    ticketCreationSection.style.display = 'block'; // Customers create tickets
+                } else {
+                    customerRegistrationSection.style.display = 'none';
+                    ticketCreationSection.style.display = 'none';
+                }
+            } else {
+                loginSection.style.display = 'block';
+                customerRegistrationSection.style.display = 'none';
+                ticketCreationSection.style.display = 'none';
+                dataDisplaySection.style.display = 'none';
+            }
+        }
+
+        // --- Authentication Functions ---
+        async function login() {
+            const username = loginUsernameInput.value;
+            const password = loginPasswordInput.value;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, password }),
+                    credentials: 'include' // Important for sessions/cookies
+                });
+
+                if (response.ok) {
+                    loginMessage.textContent = 'Login successful!';
+                    loginMessage.style.color = 'green';
+                    // After successful login, you might want to fetch user roles to adjust UI
+                    // For simplicity, we'll try to fetch a protected resource to determine role
+                    await fetchAndDisplayData(); // Attempt to fetch data after login
+                } else {
+                    loginMessage.textContent = 'Login failed. Invalid credentials.';
+                    loginMessage.style.color = 'red';
+                    updateUIVisibility(false);
+                }
+            } catch (error) {
+                console.error('Error during login:', error);
+                loginMessage.textContent = 'An error occurred during login.';
+                loginMessage.style.color = 'red';
+                updateUIVisibility(false);
+            }
+        }
+
+        async function logout() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/logout`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    loginMessage.textContent = 'Logged out successfully.';
+                    loginMessage.style.color = 'black';
+                    updateUIVisibility(false);
+                    // Clear outputs
+                    customersOutput.textContent = '';
+                    engineersOutput.textContent = '';
+                    ticketsOutput.textContent = '';
+                } else {
+                    loginMessage.textContent = 'Logout failed.';
+                    loginMessage.style.color = 'red';
+                }
+            } catch (error) {
+                console.error('Error during logout:', error);
+                loginMessage.textContent = 'An error occurred during logout.';
+                loginMessage.style.color = 'red';
+            }
+        }
+
+        // --- Customer Functions ---
+        async function registerCustomer() {
+            const username = registerCustomerUsernameInput.value;
+            const password = registerCustomerPasswordInput.value;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/customers`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, password, role: 'CUSTOMER' }), // Role is set here for simplicity
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    registerCustomerMessage.textContent = `Customer ${data.username} registered successfully!`;
+                    registerCustomerMessage.style.color = 'green';
+                    registerCustomerUsernameInput.value = '';
+                    registerCustomerPasswordInput.value = '';
+                    fetchCustomers(); // Refresh customer list
+                } else {
+                    const errorText = await response.text();
+                    registerCustomerMessage.textContent = `Failed to register customer: ${errorText || response.statusText}`;
+                    registerCustomerMessage.style.color = 'red';
+                }
+            } catch (error) {
+                console.error('Error registering customer:', error);
+                registerCustomerMessage.textContent = 'An error occurred during customer registration.';
+                registerCustomerMessage.style.color = 'red';
+            }
+        }
+
+        async function fetchCustomers() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/customers`, {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    customersOutput.textContent = JSON.stringify(data, null, 2);
+                    // Infer user role if response is successful for engineer-only endpoint
+                    // This is a simple heuristic; a proper API for user roles would be better
+                    updateUIVisibility(true, 'ENGINEER');
+                } else if (response.status === 403) {
+                    customersOutput.textContent = 'Access Denied: You do not have permission to view customers.';
+                    updateUIVisibility(true, 'CUSTOMER'); // Assume customer if engineer access is denied
+                } else {
+                    customersOutput.textContent = `Failed to fetch customers: ${response.status} ${response.statusText}`;
+                    updateUIVisibility(true, null); // Unknown role
+                }
+            } catch (error) {
+                console.error('Error fetching customers:', error);
+                customersOutput.textContent = 'An error occurred while fetching customers.';
+                updateUIVisibility(true, null);
+            }
+        }
+
+        // --- Engineer Functions ---
+        async function fetchEngineers() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/engineers`, {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    engineersOutput.textContent = JSON.stringify(data, null, 2);
+                } else {
+                    engineersOutput.textContent = `Failed to fetch engineers: ${response.status} ${response.statusText}`;
+                }
+            } catch (error) {
+                console.error('Error fetching engineers:', error);
+                engineersOutput.textContent = 'An error occurred while fetching engineers.';
+            }
+        }
+
+        // --- Ticket Functions ---
+        async function createTicket() {
+            const description = ticketDescriptionInput.value;
+            const customerId = ticketCustomerIdInput.value ? parseInt(ticketCustomerIdInput.value) : null;
+            const engineerId = ticketEngineerIdInput.value ? parseInt(ticketEngineerIdInput.value) : null;
+
+            if (!description || !customerId) {
+                createTicketMessage.textContent = 'Description and Customer ID are required.';
+                createTicketMessage.style.color = 'red';
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/tickets`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ description, customerId, engineerId }),
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    createTicketMessage.textContent = `Ticket created successfully! ID: ${data.id}`;
+                    createTicketMessage.style.color = 'green';
+                    ticketDescriptionInput.value = '';
+                    ticketCustomerIdInput.value = '';
+                    ticketEngineerIdInput.value = '';
+                    fetchTickets(); // Refresh ticket list
+                } else {
+                    const errorText = await response.text();
+                    createTicketMessage.textContent = `Failed to create ticket: ${errorText || response.statusText}`;
+                    createTicketMessage.style.color = 'red';
+                }
+            } catch (error) {
+                console.error('Error creating ticket:', error);
+                createTicketMessage.textContent = 'An error occurred during ticket creation.';
+                createTicketMessage.style.color = 'red';
+            }
+        }
+
+        async function fetchTickets() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/tickets`, {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    ticketsOutput.textContent = JSON.stringify(data, null, 2);
+                } else if (response.status === 403) {
+                    ticketsOutput.textContent = 'Access Denied: You do not have permission to view all tickets.';
+                } else {
+                    ticketsOutput.textContent = `Failed to fetch tickets: ${response.status} ${response.statusText}`;
+                }
+            } catch (error) {
+                console.error('Error fetching tickets:', error);
+                ticketsOutput.textContent = 'An error occurred while fetching tickets.';
+            }
+        }
+
+        // --- Combined Fetch and Display (for initial login check) ---
+        async function fetchAndDisplayData() {
+            await fetchCustomers(); // Try as Engineer first (will show access denied if Customer)
+            await fetchEngineers();
+            await fetchTickets();
+        }
+
+        // --- Event Listeners ---
+        loginButton.addEventListener('click', login);
+        logoutButton.addEventListener('click', logout);
+        registerCustomerButton.addEventListener('click', registerCustomer);
+        createTicketButton.addEventListener('click', createTicket);
+        getAllCustomersButton.addEventListener('click', fetchCustomers);
+        getAllEngineersButton.addEventListener('click', fetchEngineers);
+        getAllTicketsButton.addEventListener('click', fetchTickets);
+
+        // Initial UI state
+        updateUIVisibility(false);
+
+        // Optional: Check login status on page load (e.g., by trying to fetch a protected resource)
+        // This is a more robust way to handle "stay logged in" if sessions persist.
+        window.addEventListener('load', async () => {
+            await fetchAndDisplayData();
+        });
+    </script>
+</body>
+</html>

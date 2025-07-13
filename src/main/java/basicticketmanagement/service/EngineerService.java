@@ -4,6 +4,7 @@ import basicticketmanagement.model.Engineer;
 import basicticketmanagement.repository.EngineerRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -19,7 +20,7 @@ import java.util.Optional;
 public class EngineerService {
 
     private final EngineerRepository engineerRepository;
-
+    private final PasswordEncoder passwordEncoder;
     /**
      * Creates a new Engineer.
      *
@@ -29,6 +30,7 @@ public class EngineerService {
     public Engineer createEngineer(Engineer engineer) {
         // In a real application, you might add validation here
         // For instance, checking for duplicate usernames before saving.
+        engineer.setPassword(passwordEncoder.encode(engineer.getPassword()));
         return engineerRepository.save(engineer);
     }
 
@@ -64,7 +66,8 @@ public class EngineerService {
                 .map(engineer -> {
                     // Update only the fields that are meant to be updated
                     engineer.setUsername(engineerDetails.getUsername());
-                    engineer.setPassword(engineerDetails.getPassword());
+                    engineer.setPassword(passwordEncoder.encode(engineerDetails.getPassword()));
+                   // engineer.setPassword(engineerDetails.getPassword());
                     // Add any other fields that can be updated
                     return engineerRepository.save(engineer);
                 })

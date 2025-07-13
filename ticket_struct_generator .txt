@@ -1,0 +1,32 @@
+###
+POST http://localhost:8080/engineers
+Content-Type: application/json
+
+{
+  "username": "default_engineer",
+  "password": "password"
+}<Response body is empty>
+
+Response code: 403; Time: 21ms 
+how to login this via postman write step-by-step
+
+
+how to do this in detail
+✅ 2. Engineer default user creation misses role set up (Risky if role null)
+
+.requestMatchers("/tickets").hasRole(UserRole.CUSTOMER.name()) - i dont understand what is wrong here
+
+ 5. DTO TicketCreationDTO includes customerId (Not Secure)
+i need login form so write correct code 
+
+formLogin() and httpBasic() both disabled
+i dont understand this, but i need login page to authenticate users befor login as session based authentication
+also i will be using plain html js for frontend
+
+write this whole method, i dont understand how to write this
+if (customer.getRole() == null) throw new UsernameNotFoundException("Role is missing for user: " + username);
+
+
+
+
+

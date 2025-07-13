@@ -1,9 +1,6 @@
 package basicticketmanagement.model;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.Id;
-import jakarta.persistence.MappedSuperclass;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -16,10 +13,22 @@ import lombok.Setter;
 @MappedSuperclass
 public abstract class User {
     @Id
-    @GeneratedValue
+    @GeneratedValue(strategy = GenerationType.IDENTITY) // Use IDENTITY for auto-incrementing IDs
     private Long id;
 
-    @Column(unique = true)
+    @Column(unique = true, nullable = false) // Username must be unique and not null
     private String username;
+
+    @Column(nullable = false) // Password must not be null
     private String password;
+
+    @Enumerated(EnumType.STRING) // Store enum as String in DB
+    @Column(nullable = false) // Role must not be null
+    private UserRole role; // New field for user roles
+
+    public User(Long id, String username, String password) {
+        this.id = id;
+        this.username = username;
+        this.password = password;
+    }
 }

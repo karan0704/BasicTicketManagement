@@ -25,8 +25,14 @@ distributionUrl=https://repo.maven.apache.org/maven2/org/apache/maven/apache-mav
 --- File: src\main\java\basicticketmanagement\BasicTicketManagementApplication.java ---
 package basicticketmanagement;
 
+import basicticketmanagement.model.Engineer;
+import basicticketmanagement.model.UserRole;
+import basicticketmanagement.repository.EngineerRepository;
+import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.Bean;
+import org.springframework.security.crypto.password.PasswordEncoder; // Import PasswordEncoder
 
 @SpringBootApplication
 public class BasicTicketManagementApplication {
@@ -35,34 +41,160 @@ public class BasicTicketManagementApplication {
         SpringApplication.run(BasicTicketManagementApplication.class, args);
     }
 
-}
-
-
---- File: src\main\java\basicticketmanagement\configure\CorsConfigure.java ---
-package basicticketmanagement.configure;
-
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
-
-@Configuration
-public class CorsConfigure {
-
+    /**
+     * CommandLineRunner to create a default engineer on application startup if one doesn't exist.
+     * This provides an "inbuilt" engineer account for initial setup and testing.
+     *
+     * @param engineerRepository The repository for Engineer entities.
+     * @param passwordEncoder The password encoder for hashing the default password.
+     * @return A CommandLineRunner bean.
+     */
     @Bean
-    public WebMvcConfigurer corsConfigurer() {
-        return new WebMvcConfigurer() {
-            @Override
-            public void addCorsMappings(org.springframework.web.servlet.config.annotation.CorsRegistry registry) {
-                registry.addMapping("/**")
-                        .allowedOrigins("http://localhost:3000") // Use exact origin(s)
-                        .allowCredentials(true)
-                        .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                        .allowedHeaders("*");
+    public CommandLineRunner createDefaultEngineer(EngineerRepository engineerRepository, PasswordEncoder passwordEncoder) {
+        return args -> {
+            final String defaultEngineerUsername = "default_engineer";
+            final String defaultEngineerPassword = "password"; // This will be encoded
+
+            // Check if the default engineer already exists
+            if (engineerRepository.findByUsername(defaultEngineerUsername).isEmpty()) {
+                Engineer defaultEngineer = new Engineer();
+                defaultEngineer.setUsername(defaultEngineerUsername);
+                defaultEngineer.setPassword(passwordEncoder.encode(defaultEngineerPassword)); // Encode the password
+                defaultEngineer.setRole(UserRole.ENGINEER); // Set the role
+                engineerRepository.save(defaultEngineer);
+                System.out.println("Default engineer '" + defaultEngineerUsername + "' created successfully!");
+            } else {
+                System.out.println("Default engineer '" + defaultEngineerUsername + "' already exists.");
             }
         };
     }
 }
 
+
+--- File: src\main\java\basicticketmanagement\configure\SecurityConfig.java ---
+package basicticketmanagement.configure;
+
+import basicticketmanagement.model.UserRole;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.ProviderManager;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.Arrays; // Import Arrays for list creation
+
+/**
+ * Spring Security configuration for the Basic Ticket Management application.
+ * This class defines security policies, authentication providers, and authorization rules.
+ */
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity(prePostEnabled = true) // Enable @PreAuthorize and @PostAuthorize annotations
+public class SecurityConfig {
+
+    /**
+     * Configures the security filter chain.
+     * Defines which requests require authentication and which roles are allowed for specific endpoints.
+     *
+     * @param http The HttpSecurity object to configure.
+     * @return The configured SecurityFilterChain.
+     * @throws Exception if an error occurs during configuration.
+     */
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+                .csrf(AbstractHttpConfigurer::disable) // Disable CSRF for simplicity, typically enabled for web apps
+                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // Use the CorsConfigurationSource bean
+                .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers("/auth/**", "/").permitAll() // Allow public access to auth endpoints and home
+                        .requestMatchers("/customers").hasRole(UserRole.ENGINEER.name()) // Only engineers can register customers
+                        .requestMatchers("/tickets").hasRole(UserRole.CUSTOMER.name()) // Only customers can create tickets
+                        .anyRequest().authenticated() // All other requests require authentication
+                )
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED) // Use sessions
+                )
+                .formLogin(form -> form
+                        .loginProcessingUrl("/login")  // REST login endpoint
+                        .successHandler((request, response, authentication) -> {
+                            response.setStatus(200);
+                        })
+                        .failureHandler((request, response, exception) -> {
+                            response.setStatus(401);
+                        })
+                        .permitAll()
+                )
+                .logout(logout -> logout
+                        .logoutUrl("/logout")
+                        .logoutSuccessHandler((request, response, authentication) -> {
+                            response.setStatus(200);
+                        })
+                        .permitAll());
+
+        // .formLogin(AbstractHttpConfigurer::disable) // Disable default form login
+                //.httpBasic(AbstractHttpConfigurer::disable); // Disable default HTTP Basic authentication
+
+        return http.build();
+    }
+
+    /**
+     * Provides a BCryptPasswordEncoder bean for password hashing.
+     *
+     * @return A BCryptPasswordEncoder instance.
+     */
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    /**
+     * Configures the AuthenticationManager.
+     * Uses DaoAuthenticationProvider with a custom UserDetailsService and password encoder.
+     *
+     * @param userDetailsService The custom UserDetailsService.
+     * @param passwordEncoder The password encoder.
+     * @return An AuthenticationManager instance.
+     */
+    @Bean
+    public AuthenticationManager authenticationManager(UserDetailsService userDetailsService, PasswordEncoder passwordEncoder) {
+        DaoAuthenticationProvider authenticationProvider = new DaoAuthenticationProvider();
+        authenticationProvider.setUserDetailsService(userDetailsService);
+        authenticationProvider.setPasswordEncoder(passwordEncoder);
+        return new ProviderManager(authenticationProvider);
+    }
+
+    /**
+     * Configures CORS settings as a CorsConfigurationSource bean.
+     * This bean is directly used by Spring Security's CORS configuration.
+     *
+     * @return A CorsConfigurationSource instance.
+     */
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        // IMPORTANT: For local file system access, 'null' origin is required.
+        // In production, replace 'null' with your actual frontend domain(s).
+        configuration.setAllowedOrigins(Arrays.asList("http://localhost:3000", "null")); // Added "null" for file:// access
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(Arrays.asList("*")); // Allow all headers
+        configuration.setAllowCredentials(true); // Allow credentials (e.g., cookies for sessions)
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration); // Apply this CORS config to all paths
+        return source;
+    }
+}
 
 --- File: src\main\java\basicticketmanagement\controller\CustomerController.java ---
 package basicticketmanagement.controller;
@@ -184,7 +316,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class HomeController {
 
     @GetMapping("/")
-    public String home() {
+    public String   home() {
         return "Welcome to the Home Page!";
     }
 }
@@ -192,8 +324,9 @@ public class HomeController {
 --- File: src\main\java\basicticketmanagement\controller\TicketController.java ---
 package basicticketmanagement.controller;
 
+import basicticketmanagement.dto.TicketCreationDTO;
 import basicticketmanagement.model.Ticket;
-import basicticketmanagement.service.TicketService; // Import the updated service
+import basicticketmanagement.service.TicketService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -215,35 +348,30 @@ public class TicketController {
     private final TicketService ticketService; // Inject the service
 
     /**
-     * Creates a new Ticket.
-     * Note: This endpoint expects a Ticket object, but for creating,
-     * it might be better to have a DTO that only includes description
-     * and customerId, then call ticketService.createTicket(customerId, description).
-     * For simplicity, this example assumes the client sends a Ticket object
-     * where only description and potentially createdBy.id are relevant for creation.
+     * Creates a new Ticket using a TicketCreationDTO.
+     * This endpoint expects a DTO containing the ticket description, the ID of the customer,
+     * and an optional engineerId for immediate assignment.
      *
-     * @param ticket The Ticket object to be created.
+     * @param ticketDto The TicketCreationDTO object containing description, customerId, and optional engineerId.
      * @return ResponseEntity containing the created Ticket and HTTP status 201 (Created).
      */
     @PostMapping
-    public ResponseEntity<Ticket> createTicket(@RequestBody Ticket ticket) {
-        // Assuming the client sends a ticket object with at least description and createdBy.id
-        // If createdBy.id is not directly available in the request body,
-        // you might need a DTO or a separate endpoint for creating tickets.
-        // For now, let's assume `ticket.getCreatedBy().getId()` is available from the request.
-        // If not, you'd need to adjust the client request or this method signature.
+    public ResponseEntity<Ticket> createTicket(@RequestBody TicketCreationDTO ticketDto) {
+        // Validate input from DTO
+        if (ticketDto.getCustomerId() == null || ticketDto.getDescription() == null || ticketDto.getDescription().trim().isEmpty()) {
+            return ResponseEntity.badRequest().body(null); // Return 400 if essential data is missing
+        }
         try {
-            // This call needs adjustment if the client doesn't send customerId directly.
-            // For now, using a placeholder for customerId extraction.
-            // A more robust solution would involve a DTO for ticket creation.
-            Long customerId = ticket.getCreatedBy() != null ? ticket.getCreatedBy().getId() : null;
-            if (customerId == null) {
-                return ResponseEntity.badRequest().body(null); // Or throw specific exception
-            }
-            Ticket savedTicket = ticketService.createTicket(customerId, ticket.getDescription());
+            // Call the service method with customerId, description, and optional engineerId from the DTO
+            Ticket savedTicket = ticketService.createTicket(
+                    ticketDto.getCustomerId(),
+                    ticketDto.getDescription(),
+                    ticketDto.getEngineerId() // Pass the optional engineerId
+            );
             return new ResponseEntity<>(savedTicket, HttpStatus.CREATED);
         } catch (EntityNotFoundException e) {
-            return ResponseEntity.badRequest().body(null); // Customer not found
+            // If customer or engineer not found, return 400 Bad Request
+            return ResponseEntity.badRequest().body(null);
         }
     }
 
@@ -275,7 +403,7 @@ public class TicketController {
     /**
      * Updates an existing Ticket.
      *
-     * @param id The ID of the ticket to update.
+     * @param id    The ID of the ticket to update.
      * @param input The Ticket object with updated details.
      * @return ResponseEntity containing the updated Ticket (HTTP 200 OK),
      * or HTTP status 404 (Not Found) if the ticket does not exist.
@@ -310,7 +438,7 @@ public class TicketController {
     /**
      * Acknowledges a ticket by assigning an engineer.
      *
-     * @param ticketId The ID of the ticket to acknowledge.
+     * @param ticketId   The ID of the ticket to acknowledge.
      * @param engineerId The ID of the engineer acknowledging the ticket.
      * @return ResponseEntity containing the acknowledged Ticket (HTTP 200 OK),
      * or HTTP status 404 (Not Found) if ticket or engineer does not exist.
@@ -329,13 +457,77 @@ public class TicketController {
 }
 
 
+--- File: src\main\java\basicticketmanagement\dto\CustomerRegistrationDTO.java ---
+package basicticketmanagement.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+/**
+ * Data Transfer Object (DTO) for registering a new Customer.
+ * This DTO is used when an Engineer creates a new Customer account.
+ */
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class CustomerRegistrationDTO {
+    private String username;
+    private String password;
+}
+
+
+--- File: src\main\java\basicticketmanagement\dto\LoginRequest.java ---
+package basicticketmanagement.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+/**
+ * Data Transfer Object (DTO) for user login requests.
+ */
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class LoginRequest {
+    private String username;
+    private String password;
+}
+
+
+--- File: src\main\java\basicticketmanagement\dto\TicketCreationDTO.java ---
+package basicticketmanagement.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+/*
+ * Data Transfer Object (DTO) for creating a new Ticket.
+ * This class defines the minimal set of information required from the client
+ * to create a ticket. The customerId will now be derived from the authenticated user.
+ * It still includes an optional engineerId for immediate assignment.
+ */
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class TicketCreationDTO {
+    private String description;
+    private Long customerId;
+    private Long engineerId;
+}
+
 --- File: src\main\java\basicticketmanagement\model\Customer.java ---
 package basicticketmanagement.model;
 
 import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -345,7 +537,7 @@ import lombok.Setter;
 @Setter
 @Table(name = "customers")
 @NoArgsConstructor
-public class Customer extends User{
+public class Customer extends User {
 }
 
 
@@ -354,16 +546,13 @@ package basicticketmanagement.model;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 
 @NoArgsConstructor
 @Entity
 @Table(name = "engineers")
-public class Engineer extends User{
+public class Engineer extends User {
     public Engineer(Long id, String username, String password) {
         super(id, username, password);
     }
@@ -379,9 +568,6 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
-import java.time.LocalDateTime;
-
 
 
 @Entity
@@ -417,11 +603,13 @@ public enum TicketStatus {
 
 
 --- File: src\main\java\basicticketmanagement\model\User.java ---
-
 package basicticketmanagement.model;
 
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Getter
 @Setter
@@ -430,13 +618,38 @@ import lombok.*;
 @MappedSuperclass
 public abstract class User {
     @Id
-    @GeneratedValue
+    @GeneratedValue(strategy = GenerationType.IDENTITY) // Use IDENTITY for auto-incrementing IDs
     private Long id;
 
-    @Column(unique = true)
+    @Column(unique = true, nullable = false) // Username must be unique and not null
     private String username;
+
+    @Column(nullable = false) // Password must not be null
     private String password;
+
+    @Enumerated(EnumType.STRING) // Store enum as String in DB
+    @Column(nullable = false) // Role must not be null
+    private UserRole role; // New field for user roles
+
+    public User(Long id, String username, String password) {
+        this.id = id;
+        this.username = username;
+        this.password = password;
+    }
 }
+
+
+--- File: src\main\java\basicticketmanagement\model\UserRole.java ---
+package basicticketmanagement.model;
+
+/**
+ * Enum to define user roles within the application.
+ */
+public enum UserRole {
+    CUSTOMER,
+    ENGINEER
+}
+
 
 --- File: src\main\java\basicticketmanagement\repository\CustomerRepository.java ---
 package basicticketmanagement.repository;
@@ -445,8 +658,11 @@ import basicticketmanagement.model.Customer;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
+
 @Repository
 public interface CustomerRepository extends JpaRepository<Customer, Long> {
+    Optional<Customer> findByUsername(String username); // New method for finding customer by username
 }
 
 
@@ -457,8 +673,11 @@ import basicticketmanagement.model.Engineer;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
+
 @Repository
 public interface EngineerRepository extends JpaRepository<Engineer, Long> {
+    Optional<Engineer> findByUsername(String username); // New method for finding engineer by username
 }
 
 
@@ -470,7 +689,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface TicketRepository extends JpaRepository <Ticket, Long> {
+public interface TicketRepository extends JpaRepository<Ticket, Long> {
 }
 
 
@@ -482,6 +701,7 @@ package basicticketmanagement.service;
 import basicticketmanagement.model.Customer;
 import basicticketmanagement.repository.CustomerRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -492,8 +712,10 @@ import java.util.Optional;
 public class CustomerService {
 
     private final CustomerRepository customerRepository;
+    private final PasswordEncoder passwordEncoder;
 
     public Customer createCustomer(Customer customer) {
+        customer.setPassword(passwordEncoder.encode(customer.getPassword()));
         return customerRepository.save(customer);
     }
 
@@ -509,13 +731,84 @@ public class CustomerService {
         return customerRepository.findById(id)
                 .map(customer -> {
                     customer.setUsername(customerDetails.getUsername());
-                    customer.setPassword(customerDetails.getPassword());
+                    customer.setPassword(passwordEncoder.encode(customerDetails.getPassword()));
+                    //customer.setPassword(customerDetails.getPassword());
                     return customerRepository.save(customer);
                 })
                 .orElseThrow(() -> new jakarta.persistence.EntityNotFoundException("Customer not found with id " + id));
     }
 }
 
+
+--- File: src\main\java\basicticketmanagement\service\CustomUserDetailsService.java ---
+package basicticketmanagement.service;
+
+import basicticketmanagement.model.Customer;
+import basicticketmanagement.model.Engineer;
+import basicticketmanagement.model.User;
+import basicticketmanagement.repository.CustomerRepository;
+import basicticketmanagement.repository.EngineerRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.stereotype.Service;
+
+import java.util.Collections;
+import java.util.Optional;
+
+/**
+ * Custom implementation of Spring Security's UserDetailsService.
+ * This service is responsible for loading user-specific data during the authentication process.
+ */
+@Service
+@RequiredArgsConstructor
+public class CustomUserDetailsService implements UserDetailsService {
+
+    private final CustomerRepository customerRepository;
+    private final EngineerRepository engineerRepository;
+
+    /**
+     * Locates the user based on the username.
+     * In a real application, you might have a single UserRepository for all User types,
+     * or a more sophisticated way to determine the user type.
+     * For this example, we check both Customer and Engineer repositories.
+     *
+     * @param username The username of the user to retrieve.
+     * @return A Spring Security UserDetails object.
+     * @throws UsernameNotFoundException if the user could not be found or the user has no granted authorities.
+     */
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        // Try to find the user as a Customer
+        Optional<Customer> customerOptional = customerRepository.findByUsername(username);
+        if (customerOptional.isPresent()) {
+            Customer customer = customerOptional.get();
+            if (customer.getRole() == null) {
+                throw new UsernameNotFoundException("Role is missing for user: " + username);
+            }
+            return new org.springframework.security.core.userdetails.User(
+                    customer.getUsername(),
+                    customer.getPassword(),
+                    Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + customer.getRole().name()))
+            );
+        }
+
+        // If not a Customer, try to find the user as an Engineer
+        Optional<Engineer> engineerOptional = engineerRepository.findByUsername(username);
+        if (engineerOptional.isPresent()) {
+            Engineer engineer = engineerOptional.get();
+            return new org.springframework.security.core.userdetails.User(
+                    engineer.getUsername(),
+                    engineer.getPassword(),
+                    Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + engineer.getRole().name()))
+            );
+        }
+
+        throw new UsernameNotFoundException("User not found with username: " + username);
+    }
+}
 
 --- File: src\main\java\basicticketmanagement\service\EngineerService.java ---
 package basicticketmanagement.service;
@@ -524,6 +817,7 @@ import basicticketmanagement.model.Engineer;
 import basicticketmanagement.repository.EngineerRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -539,7 +833,7 @@ import java.util.Optional;
 public class EngineerService {
 
     private final EngineerRepository engineerRepository;
-
+    private final PasswordEncoder passwordEncoder;
     /**
      * Creates a new Engineer.
      *
@@ -549,6 +843,7 @@ public class EngineerService {
     public Engineer createEngineer(Engineer engineer) {
         // In a real application, you might add validation here
         // For instance, checking for duplicate usernames before saving.
+        engineer.setPassword(passwordEncoder.encode(engineer.getPassword()));
         return engineerRepository.save(engineer);
     }
 
@@ -584,7 +879,8 @@ public class EngineerService {
                 .map(engineer -> {
                     // Update only the fields that are meant to be updated
                     engineer.setUsername(engineerDetails.getUsername());
-                    engineer.setPassword(engineerDetails.getPassword());
+                    engineer.setPassword(passwordEncoder.encode(engineerDetails.getPassword()));
+                   // engineer.setPassword(engineerDetails.getPassword());
                     // Add any other fields that can be updated
                     return engineerRepository.save(engineer);
                 })
@@ -639,26 +935,36 @@ public class TicketService {
     /**
      * Creates a new ticket.
      *
-     * @param customerId The ID of the customer creating the ticket.
+     * @param customerId  The ID of the customer creating the ticket.
      * @param description The description of the ticket.
+     * @param engineerId  An optional ID of the engineer to immediately acknowledge the ticket.
      * @return The newly created Ticket object.
-     * @throws EntityNotFoundException if the customer is not found.
+     * @throws EntityNotFoundException if the customer or specified engineer is not found.
      */
-    public Ticket createTicket(Long customerId, String description) {
+    public Ticket createTicket(Long customerId, String description, Long engineerId) {
         Customer customer = customerRepo.findById(customerId)
                 .orElseThrow(() -> new EntityNotFoundException("Customer not found with id " + customerId));
 
         Ticket ticket = new Ticket();
         ticket.setCreatedBy(customer);
         ticket.setDescription(description);
-        ticket.setStatus(TicketStatus.CREATED); // Ensure status is set to CREATED
+
+        if (engineerId != null) {
+            Engineer engineer = engineerRepo.findById(engineerId)
+                    .orElseThrow(() -> new EntityNotFoundException("Engineer not found with id " + engineerId));
+            ticket.setAcknowledgedBy(engineer);
+            ticket.setStatus(TicketStatus.ACKNOWLEDGED); // Set status to ACKNOWLEDGED if assigned
+        } else {
+            ticket.setStatus(TicketStatus.CREATED); // Default status if no engineer is assigned
+        }
+
         return ticketRepo.save(ticket);
     }
 
     /**
      * Acknowledges a ticket by assigning an engineer and updating its status.
      *
-     * @param ticketId The ID of the ticket to acknowledge.
+     * @param ticketId   The ID of the ticket to acknowledge.
      * @param engineerId The ID of the engineer acknowledging the ticket.
      * @return The updated Ticket object.
      * @throws EntityNotFoundException if the ticket or engineer is not found.
@@ -697,7 +1003,7 @@ public class TicketService {
     /**
      * Updates an existing ticket.
      *
-     * @param id The ID of the ticket to update.
+     * @param id            The ID of the ticket to update.
      * @param ticketDetails The Ticket object containing updated details.
      * @return The updated Ticket object.
      * @throws EntityNotFoundException if no ticket with the given ID is found.
@@ -729,26 +1035,20 @@ public class TicketService {
     }
 }
 
-
 --- File: src\main\resources\application.properties ---
 # DataSource Configuration
 spring.datasource.url=jdbc:mysql://localhost:3306/ticketdb
 spring.datasource.username=root
 spring.datasource.password=root@1234
 spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
-
 # JPA/Hibernate Configuration
 spring.jpa.hibernate.ddl-auto=update
 spring.jpa.show-sql=true
 spring.jpa.properties.hibernate.format_sql=true
-
 # Server Port
 server.port=8080
-
 # Optional: Logging
-
 #debug=
-
 # src\main\resources\application.properties
 # For production, change DEBUG to INFO or WARN for less verbose logging
 logging.level.org.hibernate.SQL=INFO
@@ -775,19 +1075,14 @@ spring.datasource.url=jdbc:mysql://localhost:3306/ticketdb
 spring.datasource.username=root
 spring.datasource.password=root@1234
 spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
-
 # JPA/Hibernate Configuration
 spring.jpa.hibernate.ddl-auto=update
 spring.jpa.show-sql=true
 spring.jpa.properties.hibernate.format_sql=true
-
 # Server Port
 server.port=8080
-
 # Optional: Logging
-
 #debug=
-
 # src\main\resources\application.properties
 # For production, change DEBUG to INFO or WARN for less verbose logging
 logging.level.org.hibernate.SQL=INFO

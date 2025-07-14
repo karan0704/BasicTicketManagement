@@ -1,0 +1,1 @@
+write a py script to read my folder which i have made using IntelliJ springboot

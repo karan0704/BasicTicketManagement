@@ -3,6 +3,7 @@ package basicticketmanagement.service;
 // src\main\java\basicticketmanagement\service\CustomerService.java (New File)
 
 import basicticketmanagement.model.Customer;
+import basicticketmanagement.model.UserRole;
 import basicticketmanagement.repository.CustomerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -20,6 +21,7 @@ public class CustomerService {
 
     public Customer createCustomer(Customer customer) {
         customer.setPassword(passwordEncoder.encode(customer.getPassword()));
+        customer.setRole(UserRole.CUSTOMER);
         return customerRepository.save(customer);
     }
 

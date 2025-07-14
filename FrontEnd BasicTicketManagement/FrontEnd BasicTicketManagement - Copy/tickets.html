@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ticket Management System</title>
+</head>
+<body>
+    <h1>Ticket Management System</h1>
+    
+    <div id="loginSection">
+        <h2>Login</h2>
+        <form id="loginForm">
+            <div>
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            <div>
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            <button type="submit">Login</button>
+        </form>
+    </div>
+
+    <div id="loggedInSection" style="display: none;">
+        <h2>Welcome, <span id="currentUser"></span>!</h2>
+        <button id="logoutBtn">Logout</button>
+        
+        <div id="navigationMenu">
+            <h3>Navigation</h3>
+            <button id="dashboardBtn">Dashboard</button>
+            <button id="ticketsBtn">Tickets</button>
+            <button id="customersBtn" style="display: none;">Customers</button>
+            <button id="engineersBtn" style="display: none;">Engineers</button>
+        </div>
+    </div>
+
+    <div id="messages"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:8080';
+        let currentUser = null;
+        let currentUserRole = null;
+
+        // DOM elements
+        const loginSection = document.getElementById('loginSection');
+        const loggedInSection = document.getElementById('loggedInSection');
+        const loginForm = document.getElementById('loginForm');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const messages = document.getElementById('messages');
+        const currentUserSpan = document.getElementById('currentUser');
+        const dashboardBtn = document.getElementById('dashboardBtn');
+        const ticketsBtn = document.getElementById('ticketsBtn');
+        const customersBtn = document.getElementById('customersBtn');
+        const engineersBtn = document.getElementById('engineersBtn');
+
+        // Event listeners
+        loginForm.addEventListener('submit', handleLogin);
+        logoutBtn.addEventListener('click', handleLogout);
+        dashboardBtn.addEventListener('click', () => window.location.href = 'dashboard.html');
+        ticketsBtn.addEventListener('click', () => window.location.href = 'tickets.html');
+        customersBtn.addEventListener('click', () => window.location.href = 'customers.html');
+        engineersBtn.addEventListener('click', () => window.location.href = 'engineers.html');
+
+        // Login function
+        async function handleLogin(event) {
+            event.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`,
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    currentUser = username;
+                    
+                    // Determine user role by trying to access role-specific endpoints
+                    await determineUserRole();
+                    
+                    showLoggedInSection();
+                    showMessage('Login successful!', 'success');
+                } else {
+                    const error = await response.json();
+                    showMessage('Login failed: ' + error.error, 'error');
+                }
+            } catch (error) {
+                showMessage('Login error: ' + error.message, 'error');
+            }
+        }
+
+        // Logout function
+        async function handleLogout() {
+            try {
+                const response = await fetch(`${API_BASE}/logout`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    currentUser = null;
+                    currentUserRole = null;
+                    showLoginSection();
+                    showMessage('Logged out successfully!', 'success');
+                } else {
+                    showMessage('Logout failed', 'error');
+                }
+            } catch (error) {
+                showMessage('Logout error: ' + error.message, 'error');
+            }
+        }
+
+        // Determine user role
+        async function determineUserRole() {
+            try {
+                // Try to access customers endpoint (only engineers can access)
+                const customersResponse = await fetch(`${API_BASE}/customers`, {
+                    credentials: 'include'
+                });
+
+                if (customersResponse.ok) {
+                    currentUserRole = 'ENGINEER';
+                } else {
+                    // Try to access tickets endpoint (only customers can create)
+                    const ticketsResponse = await fetch(`${API_BASE}/tickets`, {
+                        credentials: 'include'
+                    });
+                    
+                    if (ticketsResponse.ok) {
+                        currentUserRole = 'CUSTOMER';
+                    } else {
+                        currentUserRole = 'UNKNOWN';
+                    }
+                }
+            } catch (error) {
+                currentUserRole = 'UNKNOWN';
+            }
+        }
+
+        // Show logged in section
+        function showLoggedInSection() {
+            loginSection.style.display = 'none';
+            loggedInSection.style.display = 'block';
+            currentUserSpan.textContent = currentUser;
+
+            // Show role-specific buttons
+            if (currentUserRole === 'ENGINEER') {
+                customersBtn.style.display = 'inline-block';
+                engineersBtn.style.display = 'inline-block';
+            } else {
+                customersBtn.style.display = 'none';
+                engineersBtn.style.display = 'none';
+            }
+        }
+
+        // Show login section
+        function showLoginSection() {
+            loginSection.style.display = 'block';
+            loggedInSection.style.display = 'none';
+            document.getElementById('loginForm').reset();
+        }
+
+        // Show messages
+        function showMessage(message, type) {
+            messages.innerHTML = `<div class="${type}">${message}</div>`;
+            setTimeout(() => {
+                messages.innerHTML = '';
+            }, 5000);
+        }
+
+        // Check if user is already logged in when page loads
+        window.addEventListener('load', async () => {
+            try {
+                const response = await fetch(`${API_BASE}/`, {
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    // User might be logged in, but we need to check properly
+                    // For now, show login form
+                    showLoginSection();
+                } else {
+                    showLoginSection();
+                }
+            } catch (error) {
+                showLoginSection();
+            }
+        });
+    </script>
+</body>
+</html>

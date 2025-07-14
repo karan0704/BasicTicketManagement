@@ -3,6 +3,7 @@ package basicticketmanagement;
 import basicticketmanagement.model.Engineer;
 import basicticketmanagement.model.UserRole;
 import basicticketmanagement.repository.EngineerRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -11,6 +12,11 @@ import org.springframework.security.crypto.password.PasswordEncoder; // Import P
 
 @SpringBootApplication
 public class BasicTicketManagementApplication {
+    @Value("${default.engineer.username}") // Inject from properties
+    private String defaultEngineerUsername;
+
+    @Value("${default.engineer.password}") // Inject from properties
+    private String defaultEngineerPassword;
 
     public static void main(String[] args) {
         SpringApplication.run(BasicTicketManagementApplication.class, args);
@@ -27,8 +33,9 @@ public class BasicTicketManagementApplication {
     @Bean
     public CommandLineRunner createDefaultEngineer(EngineerRepository engineerRepository, PasswordEncoder passwordEncoder) {
         return args -> {
-            final String defaultEngineerUsername = "default_engineer";
-            final String defaultEngineerPassword = "password"; // This will be encoded
+            //final String defaultEngineerUsername = "default_engineer";
+            //final String defaultEngineerPassword = "password"; // This will be encoded
+
 
             // Check if the default engineer already exists
             if (engineerRepository.findByUsername(defaultEngineerUsername).isEmpty()) {

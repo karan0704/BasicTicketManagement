@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login Page</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif;
+            background: #f2f2f2;
+        }
+        .container {
+            width: 300px;
+            margin: 100px auto;
+            background: #fff;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 0 10px #ccc;
+        }
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 8px;
+            margin: 8px 0 16px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            width: 100%;
+            background-color: #0074d9;
+            color: white;
+            border: none;
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .error {
+            color: red;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Login</h2>
+    <div id="errorMsg" class="error"></div>
+    <form id="loginForm">
+        <input type="text" id="username" placeholder="Username" required />
+        <input type="password" id="password" placeholder="Password" required />
+        <button type="submit">Login</button>
+    </form>
+</div>
+<script>
+    document.getElementById('loginForm').addEventListener('submit', function(e) {
+        e.preventDefault(); // Prevent form from submitting
+
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value;
+
+        // Simple client-side validation example
+        if(username === "" || password === "") {
+            document.getElementById('errorMsg').textContent = "Please enter both username and password.";
+            return;
+        }
+
+        // For demonstration, a hardcoded check (replace this with real AJAX/API call!)
+        if(username === "user" && password === "password") {
+            // Success: Redirect to dashboard or next page
+            alert("Login successful!");
+            document.getElementById('errorMsg').textContent = "";
+            // window.location.href = "/dashboard.html"; // Example redirect
+        } else {
+            document.getElementById('errorMsg').textContent = "Invalid username or password.";
+        }
+    });
+</script>
+</body>
+</html>

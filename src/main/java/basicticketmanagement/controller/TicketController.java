@@ -1,12 +1,15 @@
 package basicticketmanagement.controller;
 
 import basicticketmanagement.dto.TicketCreationDTO;
+import basicticketmanagement.model.Customer; // Import Customer model
 import basicticketmanagement.model.Ticket;
 import basicticketmanagement.service.TicketService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication; // Import Authentication
+import org.springframework.security.core.context.SecurityContextHolder; // Import SecurityContextHolder
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,28 +28,54 @@ public class TicketController {
 
     /**
      * Creates a new Ticket using a TicketCreationDTO.
-     * This endpoint expects a DTO containing the ticket description, the ID of the customer,
+     * This endpoint expects a DTO containing the ticket description
      * and an optional engineerId for immediate assignment.
+     * The customerId is derived from the authenticated user.
      *
-     * @param ticketDto The TicketCreationDTO object containing description, customerId, and optional engineerId.
+     * @param ticketDto The TicketCreationDTO object containing description and optional engineerId.
      * @return ResponseEntity containing the created Ticket and HTTP status 201 (Created).
      */
     @PostMapping
     public ResponseEntity<Ticket> createTicket(@RequestBody TicketCreationDTO ticketDto) {
         // Validate input from DTO
-        if (ticketDto.getCustomerId() == null || ticketDto.getDescription() == null || ticketDto.getDescription().trim().isEmpty()) {
-            return ResponseEntity.badRequest().body(null); // Return 400 if essential data is missing
+        if (ticketDto.getDescription() == null || ticketDto.getDescription().trim().isEmpty()) {
+            return ResponseEntity.badRequest().body(null); // Return 400 if description is missing
         }
+
+        // Get the authenticated user's information from the SecurityContext
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        // Check if the user is authenticated
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build(); // 401 Unauthorized if not authenticated
+        }
+
+        // Get the username of the currently authenticated user
+        String currentUsername = authentication.getName();
+        Long customerId;
+
         try {
-            // Call the service method with customerId, description, and optional engineerId from the DTO
+            // Retrieve the Customer entity using the username.
+            // This assumes that only Customers can create tickets and their username is in the principal.
+            Customer currentCustomer = ticketService.getCustomerByUsername(currentUsername);
+            customerId = currentCustomer.getId(); // Get the ID of the authenticated customer
+
+        } catch (EntityNotFoundException e) {
+            // This should ideally not happen if authentication is properly set up for customers,
+            // but it's a safeguard if the authenticated user's username doesn't map to a customer.
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build(); // 403 Forbidden if not a recognized customer
+        }
+
+        try {
+            // Call the service method with the derived customerId, description, and optional engineerId
             Ticket savedTicket = ticketService.createTicket(
-                    ticketDto.getCustomerId(),
+                    customerId,
                     ticketDto.getDescription(),
                     ticketDto.getEngineerId() // Pass the optional engineerId
             );
-            return new ResponseEntity<>(savedTicket, HttpStatus.CREATED);
+            return new ResponseEntity<>(savedTicket, HttpStatus.CREATED); // Return 201 Created with the new ticket
         } catch (EntityNotFoundException e) {
-            // If customer or engineer not found, return 400 Bad Request
+            // If the engineer (if provided) is not found, return 400 Bad Request
             return ResponseEntity.badRequest().body(null);
         }
     }

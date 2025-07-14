@@ -1,8 +1,11 @@
 package basicticketmanagement.configure;
 
 import basicticketmanagement.model.UserRole;
+import com.fasterxml.jackson.databind.ObjectMapper; // Import ObjectMapper
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -14,12 +17,16 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.AuthenticationEntryPoint; // Import AuthenticationEntryPoint
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.AccessDeniedHandler; // Import AccessDeniedHandler
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.Arrays; // Import Arrays for list creation
+import java.util.Arrays;
+import java.util.Collections; // Import Collections
+import java.util.List;
 
 /**
  * Spring Security configuration for the Basic Ticket Management application.
@@ -56,9 +63,20 @@ public class SecurityConfig {
                         .loginProcessingUrl("/login")  // REST login endpoint
                         .successHandler((request, response, authentication) -> {
                             response.setStatus(200);
+                            // Optionally return user details or a success message as JSON
+                            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                            String json = new ObjectMapper().writeValueAsString(
+                                    Collections.singletonMap("message", "Login successful!")
+                            );
+                            response.getWriter().write(json);
                         })
                         .failureHandler((request, response, exception) -> {
-                            response.setStatus(401);
+                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED); // 401 Unauthorized
+                            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                            String json = new ObjectMapper().writeValueAsString(
+                                    Collections.singletonMap("error", "Authentication failed: " + exception.getMessage())
+                            );
+                            response.getWriter().write(json);
                         })
                         .permitAll()
                 )
@@ -66,11 +84,18 @@ public class SecurityConfig {
                         .logoutUrl("/logout")
                         .logoutSuccessHandler((request, response, authentication) -> {
                             response.setStatus(200);
+                            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                            String json = new ObjectMapper().writeValueAsString(
+                                    Collections.singletonMap("message", "Logged out successfully.")
+                            );
+                            response.getWriter().write(json);
                         })
-                        .permitAll());
-
-        // .formLogin(AbstractHttpConfigurer::disable) // Disable default form login
-                //.httpBasic(AbstractHttpConfigurer::disable); // Disable default HTTP Basic authentication
+                        .permitAll())
+                // Add exception handling to return JSON for unauthorized/forbidden access to other endpoints
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint(restAuthenticationEntryPoint()) // For unauthenticated access
+                        .accessDeniedHandler(restAccessDeniedHandler()) // For authenticated but unauthorized access
+                );
 
         return http.build();
     }
@@ -112,12 +137,40 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         // IMPORTANT: For local file system access, 'null' origin is required.
         // In production, replace 'null' with your actual frontend domain(s).
-        configuration.setAllowedOrigins(Arrays.asList("http://localhost:3000", "null")); // Added "null" for file:// access
+        configuration.setAllowedOrigins(Arrays.asList("http://localhost:8080", "null")); // Added "http://localhost:8080" and "null" for file:// access
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*")); // Allow all headers
         configuration.setAllowCredentials(true); // Allow credentials (e.g., cookies for sessions)
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        configuration.setExposedHeaders(List.of("Set-Cookie")); // Add this line
+
+            UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration); // Apply this CORS config to all paths
         return source;
+    }
+
+    /**
+     * Custom AuthenticationEntryPoint to return 401 Unauthorized as JSON.
+     */
+    @Bean
+    public AuthenticationEntryPoint restAuthenticationEntryPoint() {
+        return (request, response, authException) -> {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            String json = new ObjectMapper().writeValueAsString(Collections.singletonMap("error", "Unauthorized: " + authException.getMessage()));
+            response.getWriter().write(json);
+        };
+    }
+
+    /**
+     * Custom AccessDeniedHandler to return 403 Forbidden as JSON.
+     */
+    @Bean
+    public AccessDeniedHandler restAccessDeniedHandler() {
+        return (request, response, accessDeniedException) -> {
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            String json = new ObjectMapper().writeValueAsString(Collections.singletonMap("error", "Forbidden: " + accessDeniedException.getMessage()));
+            response.getWriter().write(json);
+        };
     }
 }

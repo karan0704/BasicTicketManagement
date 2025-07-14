@@ -1,0 +1,86 @@
+import os
+
+def list_project_structure(base_path, output_file):
+    with open(output_file, 'w') as f:
+        for root, dirs, files in os.walk(base_path):
+            level = root.replace(base_path, '').count(os.sep)
+            indent = ' ' * 4 * level
+            f.write(f"{indent}{os.path.basename(root)}/\n")
+            subindent = ' ' * 4 * (level + 1)
+            for file in files:
+                f.write(f"{subindent}{file}\n")
+
+def create_structure_template(output_file):
+    structure = """
+# 📦 Project Structure: Ticket Management System
+
+backend/
+    ├── src/
+    │   ├── main/
+    │   │   ├── java/com/example/ticket/
+    │   │   │   ├── controller/
+    │   │   │   │   ├── AuthController.java
+    │   │   │   │   ├── CustomerController.java
+    │   │   │   │   ├── EngineerController.java
+    │   │   │   │   └── TicketController.java
+    │   │   │   ├── model/
+    │   │   │   │   ├── User.java
+    │   │   │   │   ├── Ticket.java
+    │   │   │   │   └── Role.java
+    │   │   │   ├── service/
+    │   │   │   │   ├── UserService.java
+    │   │   │   │   └── TicketService.java
+    │   │   │   └── repository/
+    │   │   │       ├── UserRepository.java
+    │   │   │       └── TicketRepository.java
+    │   └── resources/
+    │       └── application.properties
+    └── pom.xml
+
+frontend/
+    ├── public/
+    ├── src/
+    │   ├── components/
+    │   │   ├── LoginForm.js
+    │   │   ├── Dashboard.js
+    │   │   ├── CreateTicket.js
+    │   │   ├── CreateCustomer.js
+    │   │   └── CreateEngineer.js
+    │   ├── App.js
+    │   └── index.js
+    └── package.json
+
+# 🧑‍💼 User Roles & Permissions:
+
+- **Customer**
+  - Can login
+  - Can create ticket only
+
+- **Engineer**
+  - Can login
+  - Can create customer
+
+- **Default Engineer (admin: `default_engineer` / `password`)**
+  - Can create other engineers
+
+# 🔐 Auth Flow:
+- Backend handles JWT-based auth or session
+- Frontend manages login token and dashboard routes based on role
+    """
+    with open(output_file, 'a') as f:
+        f.write(structure)
+
+def main():
+    project_path = input("Enter the path to your IntelliJ Spring Boot project: ").strip()
+    output_file = "project_structure.txt"
+    
+    if not os.path.isdir(project_path):
+        print("Error: Invalid path")
+        return
+
+    list_project_structure(project_path, output_file)
+    create_structure_template(output_file)
+    print(f"✅ Project structure written to {output_file}")
+
+if __name__ == "__main__":
+    main()

@@ -1,6 +1,7 @@
 package basicticketmanagement.service;
 
 import basicticketmanagement.model.Engineer;
+import basicticketmanagement.model.UserRole;
 import basicticketmanagement.repository.EngineerRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,7 @@ public class EngineerService {
         // In a real application, you might add validation here
         // For instance, checking for duplicate usernames before saving.
         engineer.setPassword(passwordEncoder.encode(engineer.getPassword()));
+        engineer.setRole(UserRole.ENGINEER);
         return engineerRepository.save(engineer);
     }
 

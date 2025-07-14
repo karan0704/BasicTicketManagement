@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login and Dashboard</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the Inter font */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+    <div id="app-root" class="w-full">
+        <!-- Application content will be rendered here -->
+    </div>
+
+    <script>
+        // --- 1. auth.js (Simulated Auth Module) ---
+        // This module manages the current user state and provides login/logout functionality.
+        const Auth = (function() {
+            let currentUser = null;
+
+            // Attempt to load user from local storage on initialization
+            function init() {
+                const storedUser = localStorage.getItem('currentUser');
+                if (storedUser) {
+                    try {
+                        currentUser = JSON.parse(storedUser);
+                    } catch (e) {
+                        console.error("Failed to parse stored user:", e);
+                        localStorage.removeItem('currentUser'); // Clear invalid data
+                    }
+                }
+            }
+
+            // Sets the current user and stores it in local storage
+            function setUser(user) {
+                currentUser = user;
+                if (user) {
+                    localStorage.setItem('currentUser', JSON.stringify(user));
+                } else {
+                    localStorage.removeItem('currentUser');
+                }
+                // Trigger a re-render after auth state changes
+                mainApp.render();
+            }
+
+            // Returns the current user
+            function getUser() {
+                return currentUser;
+            }
+
+            // Checks if a user is currently logged in
+            function isLoggedIn() {
+                return currentUser !== null;
+            }
+
+            // Public interface for the Auth module
+            return {
+                init: init,
+                setUser: setUser,
+                getUser: getUser,
+                isLoggedIn: isLoggedIn
+            };
+        })();
+
+        // --- 2. api.js (Simulated API Module) ---
+        // This module simulates backend API calls for authentication and data operations.
+        const simulatedApi = (function() {
+            // Simplified password for demo purposes.
+            // In a real application, passwords would be hashed and stored securely on a backend.
+            const simulatedDatabase = [
+                { id: 2, username: 'customer_alice_smith', role: 'CUSTOMER', password: 'customer_alice_smith' },
+                { id: 1, username: 'default_engineer', role: 'DEFAULT_ENGINEER', password: 'default_engineer' },
+                { id: 3, username: 'engineer_john_doe', role: 'ENGINEER', password: 'engineer_john_doe' },
+            ];
+
+            // Simulates a network delay for API calls
+            async function simulateDelay() {
+                return new Promise(resolve => setTimeout(resolve, 500));
+            }
+
+            // Simulates user login
+            async function login(username, password) {
+                await simulateDelay();
+                const user = simulatedDatabase.find(u => u.username === username);
+
+                if (user && user.password === password) {
+                    // Return a simplified user object for the frontend
+                    return { success: true, user: { id: user.id, username: user.username, role: user.role } };
+                } else {
+                    return { success: false, message: 'Invalid username or password.' };
+                }
+            }
+
+            // Simulates creating a new ticket by a customer
+            async function createTicket(customerId, ticketDetails) {
+                await simulateDelay();
+                console.log(`Customer ${customerId} created ticket:`, ticketDetails);
+                // In a real app, this would persist to a database
+                return { success: true, message: 'Ticket created successfully!' };
+            }
+
+            // Simulates creating a new customer by an engineer
+            async function createCustomer(engineerId, customerDetails) {
+                await simulateDelay();
+                // Check if username already exists
+                if (simulatedDatabase.some(u => u.username === customerDetails.username)) {
+                    return { success: false, message: 'Username already exists. Please choose a different one.' };
+                }
+
+                const newCustomerId = simulatedDatabase.length + 1;
+                const newCustomer = {
+                    id: newCustomerId,
+                    username: customerDetails.username,
+                    role: 'CUSTOMER',
+                    password: customerDetails.password // Store plaintext for demo, NOT in real app
+                };
+                simulatedDatabase.push(newCustomer);
+                console.log(`Engineer ${engineerId} created new customer:`, newCustomer);
+                return { success: true, message: 'Customer created successfully!', customer: newCustomer };
+            }
+
+            // Simulates creating a new engineer by a default engineer
+            async function createEngineer(defaultEngineerId, engineerDetails) {
+                await simulateDelay();
+                // Check if username already exists
+                if (simulatedDatabase.some(u => u.username === engineerDetails.username)) {
+                    return { success: false, message: 'Username already exists. Please choose a different one.' };
+                }
+
+                const newEngineerId = simulatedDatabase.length + 1;
+                const newEngineer = {
+                    id: newEngineerId,
+                    username: engineerDetails.username,
+                    role: 'ENGINEER',
+                    password: engineerDetails.password // Store plaintext for demo, NOT in real app
+                };
+                simulatedDatabase.push(newEngineer);
+                console.log(`Default Engineer ${defaultEngineerId} created new engineer:`, newEngineer);
+                return { success: true, message: 'Engineer created successfully!', engineer: newEngineer };
+            }
+
+            // Allows fetching current users for demonstration purposes
+            function getUsers() {
+                return simulatedDatabase.map(({ id, username, role }) => ({ id, username, role }));
+            }
+
+            // Public interface for the simulatedApi module
+            return {
+                login: login,
+                createTicket: createTicket,
+                createCustomer: createCustomer,
+                createEngineer: createEngineer,
+                getUsers: getUsers
+            };
+        })();
+
+        // --- 3. renderers.js (UI Rendering Functions) ---
+        // This module contains functions responsible for rendering specific parts of the UI.
+        const UI = (function() {
+            const appRoot = document.getElementById('app-root');
+
+            // Helper to create elements with Tailwind classes
+            function createElement(tag, classes = [], attributes = {}) {
+                const element = document.createElement(tag);
+                if (classes.length > 0) {
+                    element.className = classes.join(' ');
+                }
+                for (const key in attributes) {
+                    element.setAttribute(key, attributes[key]);
+                }
+                return element;
+            }
+
+            // Renders the Login Page
+            function renderLoginPage() {
+                appRoot.innerHTML = ''; // Clear previous content
+
+                const container = createElement('div', ['min-h-screen', 'flex', 'items-center', 'justify-center', 'bg-gray-100', 'p-4', 'font-inter']);
+                const card = createElement('div', ['bg-white', 'p-8', 'rounded-lg', 'shadow-xl', 'w-full', 'max-w-md']);
+                const title = createElement('h2', ['text-3xl', 'font-bold', 'text-center', 'mb-6', 'text-gray-800']);
+                title.textContent = 'Login';
+
+                const form = createElement('form');
+                form.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const usernameInput = form.querySelector('#username');
+                    const passwordInput = form.querySelector('#password');
+                    const errorParagraph = form.querySelector('#login-error');
+
+                    errorParagraph.textContent = ''; // Clear previous errors
+
+                    const username = usernameInput.value;
+                    const password = passwordInput.value;
+
+                    const result = await simulatedApi.login(username, password);
+                    if (result.success) {
+                        Auth.setUser(result.user);
+                    } else {
+                        errorParagraph.textContent = result.message;
+                    }
+                });
+
+                // Username field
+                const usernameDiv = createElement('div', ['mb-4']);
+                const usernameLabel = createElement('label', ['block', 'text-gray-700', 'text-sm', 'font-bold', 'mb-2'], { htmlFor: 'username' });
+                usernameLabel.textContent = 'Username';
+                const usernameInput = createElement('input', ['shadow', 'appearance-none', 'border', 'rounded-lg', 'w-full', 'py-3', 'px-4', 'text-gray-700', 'leading-tight', 'focus:outline-none', 'focus:ring-2', 'focus:ring-blue-500', 'focus:border-transparent', 'transition', 'duration-200'], { type: 'text', id: 'username', required: true });
+                usernameDiv.append(usernameLabel, usernameInput);
+
+                // Password field
+                const passwordDiv = createElement('div', ['mb-6']);
+                const passwordLabel = createElement('label', ['block', 'text-gray-700', 'text-sm', 'font-bold', 'mb-2'], { htmlFor: 'password' });
+                passwordLabel.textContent = 'Password';
+                const passwordInput = createElement('input', ['shadow', 'appearance-none', 'border', 'rounded-lg', 'w-full', 'py-3', 'px-4', 'text-gray-700', 'mb-3', 'leading-tight', 'focus:outline-none', 'focus:ring-2', 'focus:ring-blue-500', 'focus:border-transparent', 'transition', 'duration-200'], { type: 'password', id: 'password', required: true });
+                passwordDiv.append(passwordLabel, passwordInput);
+
+                // Error message
+                const errorParagraph = createElement('p', ['text-red-500', 'text-xs', 'italic', 'mb-4'], { id: 'login-error' });
+
+                // Submit button
+                const buttonDiv = createElement('div', ['flex', 'items-center', 'justify-between']);
+                const submitButton = createElement('button', ['bg-blue-600', 'hover:bg-blue-700', 'text-white', 'font-bold', 'py-3', 'px-6', 'rounded-lg', 'focus:outline-none', 'focus:ring-2', 'focus:ring-blue-500', 'focus:ring-opacity-50', 'transition', 'duration-200', 'w-full'], { type: 'submit' });
+                submitButton.textContent = 'Sign In';
+                buttonDiv.appendChild(submitButton);
+
+                form.append(usernameDiv, passwordDiv, errorParagraph, buttonDiv);
+
+                // Demo credentials info
+                const demoInfoDiv = createElement('div', ['mt-6', 'text-center', 'text-gray-600', 'text-sm']);
+                const demoP = createElement('p');
+                demoP.textContent = 'Demo Credentials (username/password are the same):';
+                const demoUl = createElement('ul', ['list-disc', 'list-inside', 'mt-2', 'text-left', 'mx-auto', 'max-w-fit']);
+                demoUl.innerHTML = `
+                    <li>Customer: <span class="font-semibold">customer_alice_smith</span></li>
+                    <li>Engineer: <span class="font-semibold">engineer_john_doe</span></li>
+                    <li>Default Engineer: <span class="font-semibold">default_engineer</span></li>
+                `;
+                demoInfoDiv.append(demoP, demoUl);
+
+                card.append(title, form, demoInfoDiv);
+                container.appendChild(card);
+                appRoot.appendChild(container);
+            }
+
+            // Renders the main Dashboard structure
+            function renderDashboard() {
+                appRoot.innerHTML = ''; // Clear previous content
+                const user = Auth.getUser();
+                if (!user) {
+                    renderLoginPage(); // Fallback, though mainApp.render should prevent this
+                    return;
+                }
+
+                const container = createElement('div', ['min-h-screen', 'bg-gray-50', 'p-4', 'font-inter']);
+                const header = createElement('header', ['flex', 'justify-between', 'items-center', 'bg-white', 'p-6', 'rounded-lg', 'shadow-md', 'mb-6']);
+                const welcomeTitle = createElement('h1', ['text-3xl', 'font-bold', 'text-gray-800']);
+                welcomeTitle.textContent = `Welcome, ${user.username}!`;
+
+                const userInfoDiv = createElement('div', ['flex', 'items-center', 'space-x-4']);
+                const roleSpan = createElement('span', ['text-lg', 'text-gray-600']);
+                roleSpan.innerHTML = `Role: <span class="font-semibold text-blue-600">${user.role}</span>`;
+                const logoutButton = createElement('button', ['bg-red-500', 'hover:bg-red-600', 'text-white', 'font-bold', 'py-2', 'px-5', 'rounded-lg', 'focus:outline-none', 'focus:ring-2', 'focus:ring-red-400', 'focus:ring-opacity-50', 'transition', 'duration-200']);
+                logoutButton.textContent = 'Logout';
+                logoutButton.addEventListener('click', () => {
+                    Auth.setUser(null); // Clears user and triggers re-render to login page
+                });
+                userInfoDiv.append(roleSpan, logoutButton);
+                header.append(welcomeTitle, userInfoDiv);
+
+                const mainContent = createElement('main', ['bg-white', 'p-6', 'rounded-lg', 'shadow-md']);
+
+                container.append(header, mainContent);
+                appRoot.appendChild(container);
+
+                // Render specific dashboard based on role
+                switch (user.role) {
+                    case 'CUSTOMER':
+                        renderCustomerDashboard(mainContent);
+                        break;
+                    case 'ENGINEER':
+                        renderEngineerDashboard(mainContent);
+                        break;
+                    case 'DEFAULT_ENGINEER':
+                        renderDefaultEngineerDashboard(mainContent);
+                        break;
+                    default:
+                        const defaultMessage = createElement('div', ['text-center', 'text-gray-600', 'py-10']);
+                        defaultMessage.innerHTML = `<p class="text-xl">Your role "${user.role}" does not have a specific dashboard view.</p><p>Please contact support if you believe this is an error.</p>`;
+                        mainContent.appendChild(defaultMessage);
+                        break;
+                }
+            }
+
+            // Renders the Customer Dashboard content
+            function renderCustomerDashboard(parentEl) {
+                const user = Auth.getUser();
+                const dashboardDiv = createElement('div', ['p-4', 'border', 'border-gray-200', 'rounded-lg', 'bg-gray-50']);
+                dashboardDiv.innerHTML = `
+                    <h2 class="text-2xl font-semibold mb-4 text-gray-800">Customer Dashboard</h2>
+                    <h3 class="text-xl font-medium mb-3 text-gray-700">Create New Ticket</h3>
+                    <form id="create-ticket-form" class="space-y-4">
+                        <div>
+                            <label htmlFor="ticketSubject" class="block text-gray-700 text-sm font-bold mb-2">Subject</label>
+                            <input type="text" id="ticketSubject" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-400" required />
+                        </div>
+                        <div>
+                            <label htmlFor="ticketDescription" class="block text-gray-700 text-sm font-bold mb-2">Description</label>
+                            <textarea id="ticketDescription" rows="4" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-400" required></textarea>
+                        </div>
+                        <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-5 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-opacity-50 transition duration-200">
+                            Submit Ticket
+                        </button>
+                    </form>
+                    <p id="ticket-message" class="mt-4 text-sm"></p>
+                `;
+                parentEl.appendChild(dashboardDiv);
+
+                const form = dashboardDiv.querySelector('#create-ticket-form');
+                const messageParagraph = dashboardDiv.querySelector('#ticket-message');
+
+                form.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    messageParagraph.textContent = '';
+                    messageParagraph.className = 'mt-4 text-sm'; // Reset classes
+
+                    const subject = form.querySelector('#ticketSubject').value;
+                    const description = form.querySelector('#ticketDescription').value;
+
+                    if (!subject || !description) {
+                        messageParagraph.textContent = 'Please fill in both subject and description.';
+                        messageParagraph.classList.add('text-red-500');
+                        return;
+                    }
+
+                    const result = await simulatedApi.createTicket(user.id, {
+                        subject: subject,
+                        description: description,
+                        status: 'New',
+                        createdAt: new Date().toISOString(),
+                    });
+
+                    if (result.success) {
+                        messageParagraph.textContent = result.message;
+                        messageParagraph.classList.add('text-green-600');
+                        form.reset(); // Clear form fields
+                    } else {
+                        messageParagraph.textContent = result.message;
+                        messageParagraph.classList.add('text-red-500');
+                    }
+                });
+            }
+
+            // Renders the Engineer Dashboard content
+            function renderEngineerDashboard(parentEl) {
+                const user = Auth.getUser();
+                const dashboardDiv = createElement('div', ['p-4', 'border', 'border-gray-200', 'rounded-lg', 'bg-gray-50']);
+                dashboardDiv.innerHTML = `
+                    <h2 class="text-2xl font-semibold mb-4 text-gray-800">Engineer Dashboard</h2>
+                    <h3 class="text-xl font-medium mb-3 text-gray-700">Create New Customer</h3>
+                    <form id="create-customer-form" class="space-y-4 mb-6">
+                        <div>
+                            <label htmlFor="newCustomerUsername" class="block text-gray-700 text-sm font-bold mb-2">Customer Username</label>
+                            <input type="text" id="newCustomerUsername" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-400" required />
+                        </div>
+                        <div>
+                            <label htmlFor="newCustomerPassword" class="block text-gray-700 text-sm font-bold mb-2">Customer Password</label>
+                            <input type="password" id="newCustomerPassword" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-400" required />
+                        </div>
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-50 transition duration-200">
+                            Create Customer
+                        </button>
+                    </form>
+                    <p id="customer-message" class="mt-4 text-sm"></p>
+
+                    <div class="mt-8">
+                        <h3 class="text-xl font-medium mb-3 text-gray-700">Current Users in System (for demo visibility)</h3>
+                        <div id="users-list-container" class="bg-white p-4 rounded-lg shadow-inner max-h-60 overflow-y-auto">
+                            <!-- Users will be rendered here -->
+                        </div>
+                    </div>
+                `;
+                parentEl.appendChild(dashboardDiv);
+
+                const form = dashboardDiv.querySelector('#create-customer-form');
+                const messageParagraph = dashboardDiv.querySelector('#customer-message');
+                const usersListContainer = dashboardDiv.querySelector('#users-list-container');
+
+                // Function to render the list of users
+                function updateUsersList() {
+                    const users = simulatedApi.getUsers();
+                    usersListContainer.innerHTML = ''; // Clear existing list
+                    if (users.length > 0) {
+                        const ul = createElement('ul', ['divide-y', 'divide-gray-200']);
+                        users.forEach(u => {
+                            const li = createElement('li', ['py-2', 'flex', 'justify-between', 'items-center', 'text-gray-700']);
+                            li.innerHTML = `
+                                <span><span class="font-semibold">${u.username}</span> (ID: ${u.id})</span>
+                                <span class="px-2 py-1 rounded-full text-xs font-semibold ${
+                                    u.role === 'CUSTOMER' ? 'bg-green-100 text-green-800' :
+                                    u.role === 'ENGINEER' ? 'bg-blue-100 text-blue-800' :
+                                    'bg-purple-100 text-purple-800'
+                                }">
+                                    ${u.role}
+                                </span>
+                            `;
+                            ul.appendChild(li);
+                        });
+                        usersListContainer.appendChild(ul);
+                    } else {
+                        const p = createElement('p', ['text-gray-500']);
+                        p.textContent = 'No users found.';
+                        usersListContainer.appendChild(p);
+                    }
+                }
+                updateUsersList(); // Initial render of the user list
+
+                form.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    messageParagraph.textContent = '';
+                    messageParagraph.className = 'mt-4 text-sm'; // Reset classes
+
+                    const username = form.querySelector('#newCustomerUsername').value;
+                    const password = form.querySelector('#newCustomerPassword').value;
+
+                    if (!username || !password) {
+                        messageParagraph.textContent = 'Please fill in both username and password.';
+                        messageParagraph.classList.add('text-red-500');
+                        return;
+                    }
+
+                    const result = await simulatedApi.createCustomer(user.id, {
+                        username: username,
+                        password: password,
+                    });
+
+                    if (result.success) {
+                        messageParagraph.textContent = result.message;
+                        messageParagraph.classList.add('text-green-600');
+                        form.reset(); // Clear form fields
+                        updateUsersList(); // Refresh user list
+                    } else {
+                        messageParagraph.textContent = result.message;
+                        messageParagraph.classList.add('text-red-500');
+                    }
+                });
+            }
+
+            // Renders the Default Engineer Dashboard content
+            function renderDefaultEngineerDashboard(parentEl) {
+                const user = Auth.getUser();
+                const dashboardDiv = createElement('div', ['p-4', 'border', 'border-gray-200', 'rounded-lg', 'bg-gray-50']);
+                dashboardDiv.innerHTML = `
+                    <h2 class="text-2xl font-semibold mb-4 text-gray-800">Default Engineer Dashboard</h2>
+                    <h3 class="text-xl font-medium mb-3 text-gray-700">Create New Engineer</h3>
+                    <form id="create-engineer-form" class="space-y-4 mb-6">
+                        <div>
+                            <label htmlFor="newEngineerUsername" class="block text-gray-700 text-sm font-bold mb-2">Engineer Username</label>
+                            <input type="text" id="newEngineerUsername" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-400" required />
+                        </div>
+                        <div>
+                            <label htmlFor="newEngineerPassword" class="block text-gray-700 text-sm font-bold mb-2">Engineer Password</label>
+                            <input type="password" id="newEngineerPassword" class="shadow appearance-none border rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-400" required />
+                        </div>
+                        <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-5 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-opacity-50 transition duration-200">
+                            Create Engineer
+                        </button>
+                    </form>
+                    <p id="engineer-message" class="mt-4 text-sm"></p>
+
+                    <div class="mt-8">
+                        <h3 class="text-xl font-medium mb-3 text-gray-700">Current Users in System (for demo visibility)</h3>
+                        <div id="users-list-container" class="bg-white p-4 rounded-lg shadow-inner max-h-60 overflow-y-auto">
+                            <!-- Users will be rendered here -->
+                        </div>
+                    </div>
+                `;
+                parentEl.appendChild(dashboardDiv);
+
+                const form = dashboardDiv.querySelector('#create-engineer-form');
+                const messageParagraph = dashboardDiv.querySelector('#engineer-message');
+                const usersListContainer = dashboardDiv.querySelector('#users-list-container');
+
+                // Function to render the list of users
+                function updateUsersList() {
+                    const users = simulatedApi.getUsers();
+                    usersListContainer.innerHTML = ''; // Clear existing list
+                    if (users.length > 0) {
+                        const ul = createElement('ul', ['divide-y', 'divide-gray-200']);
+                        users.forEach(u => {
+                            const li = createElement('li', ['py-2', 'flex', 'justify-between', 'items-center', 'text-gray-700']);
+                            li.innerHTML = `
+                                <span><span class="font-semibold">${u.username}</span> (ID: ${u.id})</span>
+                                <span class="px-2 py-1 rounded-full text-xs font-semibold ${
+                                    u.role === 'CUSTOMER' ? 'bg-green-100 text-green-800' :
+                                    u.role === 'ENGINEER' ? 'bg-blue-100 text-blue-800' :
+                                    'bg-purple-100 text-purple-800'
+                                }">
+                                    ${u.role}
+                                </span>
+                            `;
+                            ul.appendChild(li);
+                        });
+                        usersListContainer.appendChild(ul);
+                    } else {
+                        const p = createElement('p', ['text-gray-500']);
+                        p.textContent = 'No users found.';
+                        usersListContainer.appendChild(p);
+                    }
+                }
+                updateUsersList(); // Initial render of the user list
+
+                form.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    messageParagraph.textContent = '';
+                    messageParagraph.className = 'mt-4 text-sm'; // Reset classes
+
+                    const username = form.querySelector('#newEngineerUsername').value;
+                    const password = form.querySelector('#newEngineerPassword').value;
+
+                    if (!username || !password) {
+                        messageParagraph.textContent = 'Please fill in both username and password.';
+                        messageParagraph.classList.add('text-red-500');
+                        return;
+                    }
+
+                    const result = await simulatedApi.createEngineer(user.id, {
+                        username: username,
+                        password: password,
+                    });
+
+                    if (result.success) {
+                        messageParagraph.textContent = result.message;
+                        messageParagraph.classList.add('text-green-600');
+                        form.reset(); // Clear form fields
+                        updateUsersList(); // Refresh user list
+                    } else {
+                        messageParagraph.textContent = result.message;
+                        messageParagraph.classList.add('text-red-500');
+                    }
+                });
+            }
+
+            // Public interface for the UI module
+            return {
+                renderLoginPage: renderLoginPage,
+                renderDashboard: renderDashboard,
+                renderCustomerDashboard: renderCustomerDashboard,
+                renderEngineerDashboard: renderEngineerDashboard,
+                renderDefaultEngineerDashboard: renderDefaultEngineerDashboard
+            };
+        })();
+
+        // --- 4. main.js (Application Entry Point) ---
+        // This module initializes the application and handles the main routing logic.
+        const mainApp = (function() {
+            // Renders the appropriate page based on authentication status
+            function render() {
+                if (Auth.isLoggedIn()) {
+                    UI.renderDashboard();
+                } else {
+                    UI.renderLoginPage();
+                }
+            }
+
+            // Initializes the application when the DOM is ready
+            function init() {
+                Auth.init(); // Initialize Auth module (load user from local storage)
+                render(); // Render the initial page
+            }
+
+            // Public interface for the mainApp module
+            return {
+                init: init,
+                render: render // Expose render to allow re-rendering on auth state changes
+            };
+        })();
+
+        // Initialize the application when the window loads
+        window.onload = mainApp.init;
+    </script>
+</body>
+</html>

@@ -1,0 +1,149 @@
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f4;
+    margin: 0;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+}
+
+.container {
+    background-color: #fff;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 800px;
+}
+
+h1, h2, h3 {
+    color: #333;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+#auth-section, #app-section {
+    margin-bottom: 30px;
+    border: 1px solid #ddd;
+    padding: 20px;
+    border-radius: 5px;
+    background-color: #fdfdfd;
+}
+
+form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+input[type="text"],
+input[type="password"],
+textarea {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 16px;
+    width: calc(100% - 22px); /* Account for padding and border */
+}
+
+textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+button {
+    background-color: #007bff;
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.2s ease;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}
+
+.message {
+    margin-top: 10px;
+    padding: 8px;
+    border-radius: 4px;
+    text-align: center;
+}
+
+.error-message {
+    color: red;
+    background-color: #ffe0e0;
+}
+
+.success-message {
+    color: green;
+    background-color: #e0ffe0;
+}
+
+ul {
+    list-style-type: none;
+    padding: 0;
+}
+
+ul li {
+    background-color: #f9f9f9;
+    border: 1px solid #eee;
+    padding: 10px;
+    margin-bottom: 8px;
+    border-radius: 4px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+}
+
+ul li button {
+    padding: 5px 10px;
+    font-size: 14px;
+    margin-left: 5px;
+}
+
+.status-created {
+    color: #d9534f; /* Red */
+    font-weight: bold;
+}
+
+.status-acknowledged {
+    color: #f0ad4e; /* Orange */
+    font-weight: bold;
+}
+
+.status-in_progress {
+    color: #337ab7; /* Blue */
+    font-weight: bold;
+}
+
+.status-closed {
+    color: #5cb85c; /* Green */
+    font-weight: bold;
+}
+
+#logout-button {
+    background-color: #dc3545;
+    margin-top: 20px;
+    display: block;
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+#logout-button:hover {
+    background-color: #c82333;
+}

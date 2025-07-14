@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Basic Ticket Management</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <h1>Basic Ticket Management</h1>
+
+    <div id="login-section">
+        <h2>Login</h2>
+        <form id="login-form">
+            <input type="text" id="username" placeholder="Username" required><br>
+            <input type="password" id="password" placeholder="Password" required><br>
+            <button type="submit">Login</button>
+        </form>
+        <div id="login-message"></div>
+    </div>
+
+    <div id="logout-section" style="display:none;">
+        <button id="logout-btn">Logout</button>
+    </div>
+
+    <div id="engineer-section" style="display:none;">
+        <h2>Register Customer (Engineer only)</h2>
+        <form id="register-customer-form">
+            <input type="text" id="customer-username" placeholder="Customer Username" required><br>
+            <input type="password" id="customer-password" placeholder="Customer Password" required><br>
+            <button type="submit">Register Customer</button>
+        </form>
+    </div>
+
+    <div id="customer-section" style="display:none;">
+        <h2>Create Ticket (Customer only)</h2>
+        <form id="create-ticket-form">
+            <input type="text" id="ticket-title" placeholder="Title" required><br>
+            <textarea id="ticket-description" placeholder="Description" required></textarea><br>
+            <button type="submit">Create Ticket</button>
+        </form>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

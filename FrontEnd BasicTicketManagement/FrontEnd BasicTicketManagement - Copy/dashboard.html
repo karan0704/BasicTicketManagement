@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Ticket Management System</title>
+</head>
+<body>
+    <h1>Dashboard</h1>
+    
+    <div id="navigation">
+        <button onclick="window.location.href='index.html'">Home</button>
+        <button onclick="window.location.href='tickets.html'">Tickets</button>
+        <button id="customersNavBtn" onclick="window.location.href='customers.html'" style="display: none;">Customers</button>
+        <button id="engineersNavBtn" onclick="window.location.href='engineers.html'" style="display: none;">Engineers</button>
+        <button id="logoutNavBtn">Logout</button>
+    </div>
+
+    <div id="userInfo">
+        <h2>Welcome, <span id="currentUser"></span>!</h2>
+        <p>Role: <span id="userRole"></span></p>
+    </div>
+
+    <div id="dashboardContent">
+        <h3>Quick Statistics</h3>
+        <div id="stats">
+            <div id="ticketStats">
+                <h4>Tickets</h4>
+                <p>Total Tickets: <span id="totalTickets">Loading...</span></p>
+                <p>Created: <span id="createdTickets">Loading...</span></p>
+                <p>Acknowledged: <span id="acknowledgedTickets">Loading...</span></p>
+                <p>In Progress: <span id="inProgressTickets">Loading...</span></p>
+                <p>Closed: <span id="closedTickets">Loading...</span></p>
+            </div>
+            
+            <div id="engineerStats" style="display: none;">
+                <h4>Engineers</h4>
+                <p>Total Engineers: <span id="totalEngineers">Loading...</span></p>
+            </div>
+            
+            <div id="customerStats" style="display: none;">
+                <h4>Customers</h4>
+                <p>Total Customers: <span id="totalCustomers">Loading...</span></p>
+            </div>
+        </div>
+
+        <h3>Recent Tickets</h3>
+        <div id="recentTickets">
+            <table id="ticketsTable" border="1">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Description</th>
+                        <th>Status</th>
+                        <th>Created By</th>
+                        <th>Acknowledged By</th>
+                    </tr>
+                </thead>
+                <tbody id="ticketsTableBody">
+                    <tr>
+                        <td colspan="5">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="messages"></div>
+
+    <script>
+        const API_BASE = 'http://localhost:8080';
+        let currentUser = null;
+        let currentUserRole = null;
+
+        // DOM elements
+        const currentUserSpan = document.getElementById('currentUser');
+        const userRoleSpan = document.getElementById('userRole');
+        const customersNavBtn = document.getElementById('customersNavBtn');
+        const engineersNavBtn = document.getElementById('engineersNavBtn');
+        const logoutNavBtn = document.getElementById('logoutNavBtn');
+        const messages = document.getElementById('messages');
+        const ticketsTableBody = document.getElementById('ticketsTableBody');
+        const engineerStats = document.getElementById('engineerStats');
+        const customerStats = document.getElementById('customerStats');
+
+        // Event listeners
+        logoutNavBtn.addEventListener('click', handleLogout);
+
+        // Initialize dashboard
+        async function initializeDashboard() {
+            try {
+                // Check if user is logged in
+                const homeResponse = await fetch(`${API_BASE}/`, {
+                    credentials: 'include'
+                });
+
+                if (!homeResponse.ok) {
+                    window.location.href = 'index.html';
+                    return;
+                }
+
+                await determineUserRole();
+                updateNavigation();
+                await loadDashboardData();
+            } catch (error) {
+                showMessage('Error initializing dashboard: ' + error.message, 'error');
+                window.location.href = 'index.html';
+            }
+        }
+
+        // Determine user role
+        async function determineUserRole() {
+            try {
+                // Try to access customers endpoint (only engineers can access)
+                const customersResponse = await fetch(`${API_BASE}/customers`, {
+                    credentials: 'include'
+                });
+
+                if (customersResponse.ok) {
+                    currentUserRole = 'ENGINEER';
+                } else {
+                    currentUserRole = 'CUSTOMER';
+                }
+            } catch (error) {
+                currentUserRole = 'UNKNOWN';
+            }
+        }
+
+        // Update navigation based on user role
+        function updateNavigation() {
+            if (currentUserRole === 'ENGINEER') {
+                customersNavBtn.style.display = 'inline-block';
+                engineersNavBtn.style.display = 'inline-block';
+                engineerStats.style.display = 'block';
+                customerStats.style.display = 'block';
+            }
+            
+            userRoleSpan.textContent = currentUserRole;
+        }
+
+        // Load dashboard data
+        async function loadDashboardData() {
+            await Promise.all([
+                loadTicketStats(),
+                loadRecentTickets(),
+                currentUserRole === 'ENGINEER' ? loadEngineerStats() : Promise.resolve(),
+                currentUserRole === 'ENGINEER' ? loadCustomerStats() : Promise.resolve()
+            ]);
+        }
+
+        // Load ticket statistics
+        async function loadTicketStats() {
+            try {
+                const response = await fetch(`${API_BASE}/tickets`, {
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const tickets = await response.json();
+                    const stats = {
+                        total: tickets.length,
+                        created: tickets.filter(t => t.status === 'CREATED').length,
+                        acknowledged: tickets.filter(t => t.status === 'ACKNOWLEDGED').length,
+                        inProgress: tickets.filter(t => t.status === 'IN_PROGRESS').length,
+                        closed: tickets.filter(t => t.status === 'CLOSED').length
+                    };
+
+                    document.getElementById('totalTickets').textContent = stats.total;
+                    document.getElementById('createdTickets').textContent = stats.created;
+                    document.getElementById('acknowledgedTickets').textContent = stats.acknowledged;
+                    document.getElementById('inProgressTickets').textContent = stats.inProgress;
+                    document.getElementById('closedTickets').textContent = stats.closed;
+                } else {
+                    throw new Error('Failed to load ticket statistics');
+                }
+            } catch (error) {
+                showMessage('Error loading ticket statistics: ' + error.message, 'error');
+            }
+        }
+
+        // Load recent tickets
+        async function loadRecentTickets() {
+            try {
+                const response = await fetch(`${API_BASE}/tickets`, {
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const tickets = await response.json();
+                    displayTickets(tickets.slice(0, 10)); // Show last 10 tickets
+                } else {
+                    throw new Error('Failed to load recent tickets');
+                }
+            } catch (error) {
+                showMessage('Error loading recent tickets: ' + error.message, 'error');
+                ticketsTableBody.innerHTML = '<tr><td colspan="5">Error loading tickets</td></tr>';
+            }
+        }
+
+        // Load engineer statistics
+        async function loadEngineerStats() {
+            try {
+                const response = await fetch(`${API_BASE}/engineers`, {
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const engineers = await response.json();
+                    document.getElementById('totalEngineers').textContent = engineers.length;
+                } else {
+                    throw new Error('Failed to load engineer statistics');
+                }
+            } catch (error) {
+                document.getElementById('totalEngineers').textContent = 'Error';
+            }
+        }
+
+        // Load customer statistics
+        async function loadCustomerStats() {
+            try {
+                const response = await fetch(`${API_BASE}/customers`, {
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const customers = await response.json();
+                    document.getElementById('totalCustomers').textContent = customers.length;
+                } else {
+                    throw new Error('Failed to load customer statistics');
+                }
+            } catch (error) {
+                document.getElementById('totalCustomers').textContent = 'Error';
+            }
+        }
+
+        // Display tickets in table
+        function displayTickets(tickets) {
+            if (tickets.length === 0) {
+                ticketsTableBody.innerHTML = '<tr><td colspan="5">No tickets found</td></tr>';
+                return;
+            }
+
+            ticketsTableBody.innerHTML = tickets.map(ticket => `
+                <tr>
+                    <td>${ticket.id}</td>
+                    <td>${ticket.description}</td>
+                    <td>${ticket.status}</td>
+                    <td>${ticket.createdBy ? ticket.createdBy.username : 'Unknown'}</td>
+                    <td>${ticket.acknowledgedBy ? ticket.acknowledgedBy.username : 'Not assigned'}</td>
+                </tr>
+            `).join('');
+        }
+
+        // Logout function
+        async function handleLogout() {
+            try {
+                const response = await fetch(`${API_BASE}/logout`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    window.location.href = 'index.html';
+                } else {
+                    showMessage('Logout failed', 'error');
+                }
+            } catch (error) {
+                showMessage('Logout error: ' + error.message, 'error');
+            }
+        }
+
+        // Show messages
+        function showMessage(message, type) {
+            messages.innerHTML = `<div class="${type}">${message}</div>`;
+            setTimeout(() => {
+                messages.innerHTML = '';
+            }, 5000);
+        }
+
+        // Initialize dashboard when page loads
+        window.addEventListener('load', initializeDashboard);
+    </script>
+</body>
+</html>

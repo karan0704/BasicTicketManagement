@@ -3,247 +3,437 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ticket Management System</title>
+    <title>Basic Ticket Management</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Ticket Management System</h1>
+    <div class="container">
+        <h1>Basic Ticket Management System</h1>
 
-    <div id="message-area" style="color: red; margin-bottom: 10px;"></div>
-
-    <!-- Login Section -->
-    <section id="login-section">
-        <h2>Login</h2>
-        <form id="login-form">
-            <label for="login-username">Username:</label><br>
-            <input type="text" id="login-username" name="username" required><br><br>
-            <label for="login-password">Password:</label><br>
-            <input type="password" id="login-password" name="password" required><br><br>
-            <button type="submit">Login</button>
-        </form>
-    </section>
-
-    <!-- Authenticated User Section -->
-    <section id="authenticated-section" style="display: none;">
-        <h2 id="welcome-message"></h2>
-        <button id="logout-button">Logout</button>
-
-        <!-- Engineer-specific actions -->
-        <div id="engineer-actions" style="display: none;">
-            <h3>Register New Customer (Engineer Only)</h3>
-            <form id="register-customer-form">
-                <label for="reg-username">Customer Username:</label><br>
-                <input type="text" id="reg-username" name="username" required><br><br>
-                <label for="reg-password">Customer Password:</label><br>
-                <input type="password" id="reg-password" name="password" required><br><br>
-                <button type="submit">Register Customer</button>
+        <div id="auth-section">
+            <h2>Login</h2>
+            <form id="login-form">
+                <input type="text" id="username" placeholder="Username" required>
+                <input type="password" id="password" placeholder="Password" required>
+                <button type="submit">Login</button>
             </form>
+            <p id="login-message" class="error-message"></p>
         </div>
 
-        <!-- Customer-specific actions -->
-        <div id="customer-actions" style="display: none;">
-            <h3>Create New Ticket (Customer Only)</h3>
-            <form id="create-ticket-form">
-                <label for="ticket-description">Ticket Description:</label><br>
-                <textarea id="ticket-description" name="description" rows="4" cols="50" required></textarea><br><br>
-                <label for="ticket-engineer-id">Assign Engineer ID (Optional):</label><br>
-                <input type="number" id="ticket-engineer-id" name="engineerId"><br><br>
-                <button type="submit">Create Ticket</button>
-            </form>
-        </div>
-    </section>
+        <div id="app-section" style="display: none;">
+            <p>Welcome, <span id="current-user"></span>! (<span id="current-role"></span>)</p>
+            <button id="logout-button">Logout</button>
 
-    <script>d
+            <div id="engineer-section" style="display: none;">
+                <h2>Engineer Dashboard</h2>
+                <h3>Register New Customer</h3>
+                <form id="register-customer-form">
+                    <input type="text" id="new-customer-username" placeholder="Customer Username" required>
+                    <input type="password" id="new-customer-password" placeholder="Customer Password" required>
+                    <button type="submit">Register Customer</button>
+                </form>
+                <p id="register-customer-message" class="message"></p>
+
+                <h3>All Tickets (Engineer View)</h3>
+                <ul id="engineer-tickets-list"></ul>
+
+                <h3>All Customers</h3>
+                <ul id="customer-list"></ul>
+            </div>
+
+            <div id="customer-section" style="display: none;">
+                <h2>Customer Dashboard</h2>
+                <h3>Create New Ticket</h3>
+                <form id="create-ticket-form">
+                    <textarea id="ticket-description" placeholder="Ticket Description" required></textarea>
+                    <button type="submit">Create Ticket</button>
+                </form>
+                <p id="create-ticket-message" class="message"></p>
+
+                <h3>My Tickets (Customer View)</h3>
+                <ul id="customer-tickets-list"></ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
         const API_BASE_URL = 'http://localhost:8080';
-        const messageArea = document.getElementById('message-area');
-        const loginSection = document.getElementById('login-section');
-        const authenticatedSection = document.getElementById('authenticated-section');
-        const welcomeMessage = document.getElementById('welcome-message');
-        const engineerActions = document.getElementById('engineer-actions');
-        const customerActions = document.getElementById('customer-actions');
+
+        const authSection = document.getElementById('auth-section');
+        const appSection = document.getElementById('app-section');
         const loginForm = document.getElementById('login-form');
+        const loginMessage = document.getElementById('login-message');
         const logoutButton = document.getElementById('logout-button');
+        const currentUserSpan = document.getElementById('current-user');
+        const currentRoleSpan = document.getElementById('current-role');
+
+        const engineerSection = document.getElementById('engineer-section');
         const registerCustomerForm = document.getElementById('register-customer-form');
+        const registerCustomerMessage = document.getElementById('register-customer-message');
+        const engineerTicketsList = document.getElementById('engineer-tickets-list');
+        const customerList = document.getElementById('customer-list');
+
+        const customerSection = document.getElementById('customer-section');
         const createTicketForm = document.getElementById('create-ticket-form');
+        const createTicketMessage = document.getElementById('create-ticket-message');
+        const customerTicketsList = document.getElementById('customer-tickets-list');
 
-        let currentUserRole = null;
-        let currentUsername = null;
+        let loggedInUser = null;
+        let loggedInRole = null;
 
-        // Function to display messages
-        function displayMessage(message, isError = false) {
-            messageArea.textContent = message;
-            messageArea.style.color = isError ? 'red' : 'green';
-        }
-
-        // Function to clear messages
-        function clearMessage() {
-            messageArea.textContent = '';
-        }
-
-        // Function to update UI based on authentication status and role
+        // Function to show/hide sections based on login status and role
         function updateUI() {
-            clearMessage();
-            if (currentUserRole) {
-                loginSection.style.display = 'none';
-                authenticatedSection.style.display = 'block';
-                welcomeMessage.textContent = `Welcome, ${currentUsername} (${currentUserRole})!`;
+            if (loggedInUser) {
+                authSection.style.display = 'none';
+                appSection.style.display = 'block';
+                currentUserSpan.textContent = loggedInUser;
+                currentRoleSpan.textContent = loggedInRole;
 
-                if (currentUserRole === 'ENGINEER') {
-                    engineerActions.style.display = 'block';
-                    customerActions.style.display = 'none';
-                } else if (currentUserRole === 'CUSTOMER') {
-                    engineerActions.style.display = 'none';
-                    customerActions.style.display = 'block';
+                if (loggedInRole === 'ENGINEER') {
+                    engineerSection.style.display = 'block';
+                    customerSection.style.display = 'none';
+                    fetchCustomers();
+                    fetchEngineerTickets();
+                } else if (loggedInRole === 'CUSTOMER') {
+                    engineerSection.style.display = 'none';
+                    customerSection.style.display = 'block';
+                    fetchCustomerTickets();
                 }
             } else {
-                loginSection.style.display = 'block';
-                authenticatedSection.style.display = 'none';
-                engineerActions.style.display = 'none';
-                customerActions.style.display = 'none';
-                welcomeMessage.textContent = '';
+                authSection.style.display = 'block';
+                appSection.style.display = 'none';
+                engineerSection.style.display = 'none';
+                customerSection.style.display = 'none';
+                loginMessage.textContent = '';
+                registerCustomerMessage.textContent = '';
+                createTicketMessage.textContent = '';
             }
         }
 
-        // Handle Login Form Submission
-        loginForm.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            clearMessage();
-
-            const username = document.getElementById('login-username').value;
-            const password = document.getElementById('login-password').value;
+        // --- Authentication Functions ---
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = loginForm.username.value;
+            const password = loginForm.password.value;
 
             try {
                 const response = await fetch(`${API_BASE_URL}/login`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ username, password })
+                    body: JSON.stringify({ username, password }),
                 });
 
-                const data = await response.json();
-
                 if (response.ok) {
-                    displayMessage(data.message);
-                    currentUsername = data.username;
-                    // For simplicity, we'll try to determine the role by attempting to access a role-specific endpoint.
-                    // A more robust solution would involve the backend returning the role upon login.
-                    // For now, we'll assume the role based on which action they can perform.
-                    // Let's try to fetch customers (engineer-only endpoint) to determine if it's an engineer.
-                    try {
-                        const engineerCheckResponse = await fetch(`${API_BASE_URL}/customers`, {credentials: 'include'});
-                        if (engineerCheckResponse.ok) {
-                            currentUserRole = 'ENGINEER';
-                        } else {
-                            currentUserRole = 'CUSTOMER'; // If not engineer, assume customer
-                        }
-                    } catch (roleError) {
-                        // If there's an error checking engineer role, assume customer or handle appropriately
-                        currentUserRole = 'CUSTOMER';
+                    const data = await response.json(); // Read the JSON response for the message
+                    // For session-based security, the server sets a session cookie
+                    // No explicit token handling needed on the client side for subsequent requests
+
+                    // Fetch user details to determine role after successful login
+                    const userDetailsResponse = await fetch(`${API_BASE_URL}/auth/me`);
+                    if (userDetailsResponse.ok) {
+                        const userDetails = await userDetailsResponse.json();
+                        loggedInUser = userDetails.username;
+                        loggedInRole = userDetails.role;
+                        loginMessage.textContent = data.message;
+                        loginMessage.style.color = 'green';
+                        updateUI();
+                    } else {
+                        loginMessage.textContent = 'Login successful, but failed to fetch user details.';
+                        loginMessage.style.color = 'orange';
+                        loggedInUser = username; // Fallback
+                        loggedInRole = 'UNKNOWN'; // Fallback
+                        updateUI();
                     }
-                    updateUI();
+
                 } else {
-                    displayMessage(data.message || 'Login failed!', true);
-                    currentUserRole = null;
-                    currentUsername = null;
+                    const errorData = await response.json();
+                    loginMessage.textContent = errorData.error || 'Login failed.';
+                    loginMessage.style.color = 'red';
+                    loggedInUser = null;
+                    loggedInRole = null;
                     updateUI();
                 }
             } catch (error) {
-                displayMessage(`Error during login: ${error.message}`, true);
-                currentUserRole = null;
-                currentUsername = null;
-                updateUI();
+                console.error('Login error:', error);
+                loginMessage.textContent = 'Network error during login. Please try again.';
+                loginMessage.style.color = 'red';
             }
         });
 
-        // Handle Logout Button
         logoutButton.addEventListener('click', async () => {
-            // For session-based authentication, logging out typically involves
-            // invalidating the session on the server. Since we don't have
-            // a dedicated logout endpoint provided in the Spring Boot code,
-            // we'll simulate a client-side logout by clearing local state.
-            // In a real application, you'd call a /logout endpoint on the backend.
-            displayMessage('Logged out successfully.');
-            currentUserRole = null;
-            currentUsername = null;
-            updateUI();
-            // Clear form fields
-            loginForm.reset();
-            registerCustomerForm.reset();
-            createTicketForm.reset();
+            try {
+                const response = await fetch(`${API_BASE_URL}/logout`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json', // Not strictly needed for logout but good practice
+                    },
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    alert(data.message);
+                    loggedInUser = null;
+                    loggedInRole = null;
+                    updateUI();
+                } else {
+                    const errorData = await response.json();
+                    alert(errorData.error || 'Logout failed.');
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+                alert('Network error during logout. Please try again.');
+            }
         });
 
-        // Handle Register Customer Form Submission (Engineer Only)
-        registerCustomerForm.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            clearMessage();
 
-            const username = document.getElementById('reg-username').value;
-            const password = document.getElementById('reg-password').value;
+        // --- Engineer Functions ---
+        registerCustomerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = registerCustomerForm['new-customer-username'].value;
+            const password = registerCustomerForm['new-customer-password'].value;
 
             try {
                 const response = await fetch(`${API_BASE_URL}/customers`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ username, password }),
-                    credentials: 'include' // Important for sending session cookies
+                    body: JSON.stringify({ username, password, role: 'CUSTOMER' }), // Role set on backend
                 });
 
-                const data = await response.json();
-
                 if (response.ok) {
-                    displayMessage(`Customer '${data.username}' registered successfully!`);
+                    registerCustomerMessage.textContent = `Customer ${username} registered successfully!`;
+                    registerCustomerMessage.style.color = 'green';
                     registerCustomerForm.reset();
+                    fetchCustomers(); // Refresh customer list
                 } else {
-                    displayMessage(data.message || 'Customer registration failed!', true);
+                    const errorData = await response.json(); // Assuming JSON error response
+                    registerCustomerMessage.textContent = errorData.error || 'Failed to register customer.';
+                    registerCustomerMessage.style.color = 'red';
                 }
             } catch (error) {
-                displayMessage(`Error registering customer: ${error.message}`, true);
+                console.error('Register customer error:', error);
+                registerCustomerMessage.textContent = 'Network error during customer registration.';
+                registerCustomerMessage.style.color = 'red';
             }
         });
 
-        // Handle Create Ticket Form Submission (Customer Only)
-        createTicketForm.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            clearMessage();
+        async function fetchCustomers() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/customers`);
+                if (response.ok) {
+                    const customers = await response.json();
+                    customerList.innerHTML = '';
+                    if (customers.length === 0) {
+                        customerList.innerHTML = '<li>No customers found.</li>';
+                        return;
+                    }
+                    customers.forEach(customer => {
+                        const li = document.createElement('li');
+                        li.textContent = `ID: ${customer.id}, Username: ${customer.username}`;
+                        customerList.appendChild(li);
+                    });
+                } else {
+                    customerList.innerHTML = '<li>Failed to load customers.</li>';
+                }
+            } catch (error) {
+                console.error('Fetch customers error:', error);
+                customerList.innerHTML = '<li>Error loading customers.</li>';
+            }
+        }
 
-            const description = document.getElementById('ticket-description').value;
-            const engineerId = document.getElementById('ticket-engineer-id').value;
+        async function fetchEngineerTickets() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/tickets`);
+                if (response.ok) {
+                    const tickets = await response.json();
+                    engineerTicketsList.innerHTML = '';
+                    if (tickets.length === 0) {
+                        engineerTicketsList.innerHTML = '<li>No tickets found.</li>';
+                        return;
+                    }
+                    tickets.forEach(ticket => {
+                        const li = document.createElement('li');
+                        let acknowledgedBy = ticket.acknowledgedBy ? ` (Acknowledged by: ${ticket.acknowledgedBy.username})` : '';
+                        li.innerHTML = `
+                            Ticket ID: ${ticket.id},
+                            Description: ${ticket.description},
+                            Status: <span class="status-${ticket.status.toLowerCase()}">${ticket.status}</span>,
+                            Created By: ${ticket.createdBy.username} ${acknowledgedBy}
+                            <button onclick="acknowledgeTicket(${ticket.id})">Acknowledge</button>
+                            <button onclick="updateTicketStatus(${ticket.id}, 'IN_PROGRESS')">In Progress</button>
+                            <button onclick="updateTicketStatus(${ticket.id}, 'CLOSED')">Close</button>
+                        `;
+                        engineerTicketsList.appendChild(li);
+                    });
+                } else {
+                    engineerTicketsList.innerHTML = '<li>Failed to load tickets.</li>';
+                }
+            } catch (error) {
+                console.error('Fetch engineer tickets error:', error);
+                engineerTicketsList.innerHTML = '<li>Error loading tickets.</li>';
+            }
+        }
 
-            const ticketData = {
-                description: description
-            };
+        async function acknowledgeTicket(ticketId) {
+            // In a real app, you'd get the engineerId from the logged-in user context
+            // For this example, assuming the logged-in user is the engineer performing the action
+            const engineerId = prompt("Enter Engineer ID to acknowledge (e.g., your ID if logged in as engineer):");
+            if (!engineerId) return;
 
-            if (engineerId) {
-                ticketData.engineerId = parseInt(engineerId);
+            try {
+                const response = await fetch(`${API_BASE_URL}/tickets/${ticketId}/acknowledge/${engineerId}`, {
+                    method: 'PUT',
+                });
+                if (response.ok) {
+                    alert('Ticket acknowledged successfully!');
+                    fetchEngineerTickets();
+                } else {
+                    const errorData = await response.json();
+                    alert('Failed to acknowledge ticket: ' + (errorData.error || response.statusText));
+                }
+            } catch (error) {
+                console.error('Acknowledge ticket error:', error);
+                alert('Network error during ticket acknowledgment.');
+            }
+        }
+
+        async function updateTicketStatus(ticketId, newStatus) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/tickets/${ticketId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ status: newStatus }),
+                });
+                if (response.ok) {
+                    alert(`Ticket status updated to ${newStatus}!`);
+                    fetchEngineerTickets();
+                } else {
+                    const errorData = await response.json();
+                    alert('Failed to update ticket status: ' + (errorData.error || response.statusText));
+                }
+            } catch (error) {
+                console.error('Update ticket status error:', error);
+                alert('Network error during ticket status update.');
+            }
+        }
+
+
+        // --- Customer Functions ---
+        createTicketForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const description = createTicketForm['ticket-description'].value;
+
+            // In a real app, you would get the customerId from the authenticated user.
+            // For simplicity, we'll assume the customer ID is available or fetched.
+            // You might need an /auth/me endpoint that returns user details including ID.
+            // For now, let's prompt or hardcode a dummy for demonstration.
+            const customerId = prompt("Enter your Customer ID (e.g., your ID if logged in as customer):");
+            if (!customerId) {
+                createTicketMessage.textContent = 'Customer ID is required.';
+                createTicketMessage.style.color = 'red';
+                return;
             }
 
             try {
                 const response = await fetch(`${API_BASE_URL}/tickets`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify(ticketData),
-                    credentials: 'include' // Important for sending session cookies
+                    body: JSON.stringify({ customerId: parseInt(customerId), description }),
                 });
 
-                const data = await response.json();
-
                 if (response.ok) {
-                    displayMessage(`Ticket #${data.id} created successfully! Status: ${data.status}`);
+                    createTicketMessage.textContent = 'Ticket created successfully!';
+                    createTicketMessage.style.color = 'green';
                     createTicketForm.reset();
+                    fetchCustomerTickets(); // Refresh customer's tickets
                 } else {
-                    displayMessage(data.message || 'Ticket creation failed!', true);
+                    const errorData = await response.json();
+                    createTicketMessage.textContent = errorData.error || 'Failed to create ticket.';
+                    createTicketMessage.style.color = 'red';
                 }
             } catch (error) {
-                displayMessage(`Error creating ticket: ${error.message}`, true);
+                console.error('Create ticket error:', error);
+                createTicketMessage.textContent = 'Network error during ticket creation.';
+                createTicketMessage.style.color = 'red';
             }
         });
 
+        async function fetchCustomerTickets() {
+            try {
+                // In a real application, you would filter tickets by the logged-in customer's ID
+                // The backend currently fetches all tickets.
+                // For this example, we'll fetch all and assume the customer only cares about their own.
+                // A better approach would be a /tickets/myTickets endpoint or filtering on the backend.
+                const response = await fetch(`${API_BASE_URL}/tickets`);
+                if (response.ok) {
+                    const allTickets = await response.json();
+                    // Filter tickets created by the current customer
+                    // This requires the /auth/me endpoint to provide the customer's ID, or another mechanism
+                    // For this basic example, we'll just show all tickets for now, assuming a customer
+                    // might see all if the backend isn't filtering.
+                    // A more accurate client-side filter would look like:
+                    // const customerId = // get loggedInCustomerId from /auth/me or session
+                    // const tickets = allTickets.filter(ticket => ticket.createdBy.id === customerId);
+
+                    customerTicketsList.innerHTML = '';
+                    if (allTickets.length === 0) {
+                        customerTicketsList.innerHTML = '<li>No tickets created yet.</li>';
+                        return;
+                    }
+                    allTickets.forEach(ticket => {
+                        const li = document.createElement('li');
+                        let acknowledgedBy = ticket.acknowledgedBy ? ` (Acknowledged by: ${ticket.acknowledgedBy.username})` : '';
+                        li.innerHTML = `
+                            Ticket ID: ${ticket.id},
+                            Description: ${ticket.description},
+                            Status: <span class="status-${ticket.status.toLowerCase()}">${ticket.status}</span>
+                            ${acknowledgedBy}
+                        `;
+                        customerTicketsList.appendChild(li);
+                    });
+                } else {
+                    customerTicketsList.innerHTML = '<li>Failed to load your tickets.</li>';
+                }
+            } catch (error) {
+                console.error('Fetch customer tickets error:', error);
+                customerTicketsList.innerHTML = '<li>Error loading your tickets.</li>';
+            }
+        }
+
+
         // Initial UI update on page load
         updateUI();
+
+        // Optional: Check if already logged in on page load (e.g., if session cookie exists)
+        // This requires an endpoint that returns the current user's details without requiring re-login.
+        async function checkLoginStatus() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/auth/me`);
+                if (response.ok) {
+                    const userDetails = await response.json();
+                    loggedInUser = userDetails.username;
+                    loggedInRole = userDetails.role;
+                    updateUI();
+                } else {
+                    loggedInUser = null;
+                    loggedInRole = null;
+                    updateUI();
+                }
+            } catch (error) {
+                console.error('Error checking login status:', error);
+                loggedInUser = null;
+                loggedInRole = null;
+                updateUI();
+            }
+        }
+        checkLoginStatus(); // Call on page load
     </script>
 </body>
 </html>
